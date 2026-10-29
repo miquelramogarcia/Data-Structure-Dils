@@ -57,9 +57,9 @@ No hay columna de total de tipologías, ni fila nacional con etiqueta, ni marcas
 
 Resultado (descarga 2026-10-29): **1.281.664 filas**: CCAA 486, Provincia 1.362, Municipio 160.934, Distrito 221.814, Seccion 897.068 (COLECTIVA 641.617, UNIFAMILIAR 640.047).
 
-Tiempo y memoria (Windows, Python 3.13, `python -m etl.ejecutar_todo MIVAU-34010110 MIVAU-ETI MIVAU-SERPAVI`, descargas ya en disco): lectura del xlsx 80-100 s; SERPAVI completo (leer + resolver + cuadre + validar + CSV) ~2 min; pico de memoria antes de construir el libro 1,3 GB; `construir_libro` 140-180 s y pico 3,4 GB (las hojas se escriben con openpyxl en modo normal: la muestra de 100.000 filas x 30 columnas, el maestro de 55.043 filas y el resto de tablas); proceso completo 4,5-6,5 min.
+Tiempo y memoria (Windows, Python 3.13, descargas ya en disco). Primera medida (primera ejecución de la Tarea 14, `python -m etl.ejecutar_todo MIVAU-34010110 MIVAU-ETI MIVAU-SERPAVI`, libro con muestra de 100.000 filas): SERPAVI completo ~2 min, pico 1,3 GB antes del libro; `construir_libro` 140-180 s y pico 3,4 GB; total 4,5-6,5 min. Ejecución final (2026-10-29, `python -m etl.ejecutar_todo MIVAU-ETI MIVAU-SERPAVI MIVAU-34010110`, libro con muestra de 1.000 filas por hoja): fuentes 526 s (equipo más cargado que en la primera medida), pico 1,28 GB; `construir_libro` 83,8 s (163,2 s con la regla anterior, medido el mismo día en el mismo equipo) sin subir el pico; total 610 s (10,2 min).
 
-En el libro `Data Dils_v2.xlsx` la hoja `mivau_serpavi_alquiler` tiene la nota "Muestra: primeras 100000 de 1281664 filas. La tabla completa está en etl/salida/mivau_serpavi_alquiler.csv" en A1, la cabecera en la fila 2 y 100.000 filas de datos (regla `LIMITE_FILAS_HOJA`/`FILAS_MUESTRA` de la Tarea 7); la hoja Tablas muestra 1281664 en "Filas".
+En el libro `Data Dils_v2.xlsx` la hoja `mivau_serpavi_alquiler` (oculta) tiene la nota "Muestra: 1000 de 1281664 filas. La tabla completa está en etl/salida/mivau_serpavi_alquiler.csv" en A1, la cabecera en la fila 2 y 1.000 filas de datos (regla `muestra_libro` / `FILAS_MUESTRA_LIBRO`, ver README): 2024 de los cinco niveles (200 municipios, 200 distritos, 200 secciones, 104 provincias) y las CCAA y provincias de los años anteriores hasta completar; la hoja Tablas muestra 1281664 en "Filas".
 
 ## Decisiones
 - Una sola tabla con todos los niveles (`nivel` gana `'Distrito'` y `'Seccion'` en el ENUM de ESTA tabla; `cod_territorio` VARCHAR(12)); columnas propias `cod_distrito` CHAR(7) y `cod_seccion` CHAR(10) tras `nombre_municipio`.
@@ -75,7 +75,7 @@ En el libro `Data Dils_v2.xlsx` la hoja `mivau_serpavi_alquiler` tiene la nota "
 - 35 diferencias de recuento entre niveles, todas en Navarra (`EXCEPCIONES_RECUENTOS`): provincia 31 frente a sus municipios en 2023 unifamiliar (+2), 2024 colectiva (+2) y 2024 unifamiliar (+56); y en 2022, 15 municipios frente a sus distritos y 17 distritos frente a sus secciones (los distritos de 2022 de Navarra parecen desplazados entre municipios vecinos: municipio = suma de secciones, pero no = suma de distritos; p. ej. Jaurrieta 31134 colectiva 2022: municipio 1, distrito 3, sección 1). Se cargan tal cual. Pendiente de revisión por el usuario.
 - Navarra y País Vasco (régimen foral): sin recuentos en la hoja CCAA (celdas vacías) y en muchos años sin datos; hay 4 celdas CCAA con recuento vacío cuyas provincias sí lo tienen (no es descuadre: el padre es NULL).
 - Secreto estadístico: muchas medianas vacías en secciones y distritos pequeños (NULL).
-- El CSV completo no se versiona (246 MB); el libro solo muestra 100.000 filas.
+- El CSV completo no se versiona (246 MB); el libro solo trae una muestra de 1.000 filas.
 - El seccionado es el de 2021: secciones y distritos no se recodifican a seccionados de otros años.
 
 ## Valores comprobados

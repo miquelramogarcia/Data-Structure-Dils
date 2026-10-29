@@ -17,8 +17,11 @@ from etl.lib.territorios import cargar_maestro, leer_hoja_con_errores
 
 DIR_SALIDA = Path(__file__).parent / "salida"
 GLOSARIO = DIR_CATALOGO / "glosario.csv"
-LIMITE_FILAS_HOJA = 1_048_575
-FILAS_MUESTRA = 100_000
+# Las hojas de datos del libro son una MUESTRA de cada tabla (petición del usuario, 2026-10-29): la tabla completa
+# es el CSV de etl/salida/, que es lo que se importa a MySQL. Regla de la muestra en `muestra_libro`.
+FILAS_MUESTRA_LIBRO = 1000
+# Orden de niveles territoriales para la muestra (de mayor a menor); un nivel desconocido va al final.
+ORDEN_NIVELES = ["Nacional", "CCAA", "Provincia", "Municipio", "Distrito", "Seccion"]
 MAX_HOJA = 31
 ANCHO_MAX = 60
 ANCHO_CREATE = 100
@@ -173,6 +176,45 @@ def _es_error(v) -> bool:
     return isinstance(v, str) and v.strip() in ERRORES_EXCEL
 
 
+def muestra_libro(df: pd.DataFrame, n: int) -> pd.DataFrame:
+    """Muestra estable y representativa de una tabla para su hoja del libro (como mucho `n` filas).
+
+    1. Orden: `fecha` descendente (lo más reciente primero), `nivel` según ORDEN_NIVELES, `cod_territorio` e
+       `id_registro` (las columnas que falten se omiten; sin ninguna, se respeta el orden del CSV).
+    2. Cada nivel presente recibe una cuota de n // nº de niveles filas (sus primeras en ese orden), para que
+       aparezcan todos los niveles territoriales aunque el más fino tenga muchas más filas; lo que sobre (niveles
+       con menos filas que la cuota) se rellena con las siguientes filas en el mismo orden.
+    3. La muestra se presenta en ese mismo orden. No depende del orden de entrada ni de nada aleatorio.
+    """
+    d = df.reset_index(drop=True)
+    aux = pd.DataFrame(index=d.index)
+    ascendente = []
+    if "fecha" in d.columns:
+        aux["fecha"] = d["fecha"].astype(str)
+        ascendente.append(False)
+    if "nivel" in d.columns:
+        aux["nivel"] = d["nivel"].map({v: i for i, v in enumerate(ORDEN_NIVELES)}).fillna(len(ORDEN_NIVELES))
+        ascendente.append(True)
+    for c in ("cod_territorio", "id_registro"):
+        if c in d.columns:
+            aux[c] = d[c].astype(str)
+            ascendente.append(True)
+    orden = list(aux.sort_values(list(aux.columns), ascending=ascendente, kind="stable").index
+                 if ascendente else d.index)
+    if len(orden) > n:
+        if "nivel" in aux.columns:
+            niveles = aux.loc[orden, "nivel"]
+            elegidas = set(niveles.groupby(niveles, sort=False).head(n // niveles.nunique()).index)
+            for i in orden:                      # relleno con las siguientes filas en el mismo orden
+                if len(elegidas) >= n:
+                    break
+                elegidas.add(i)
+            orden = [i for i in orden if i in elegidas]
+        else:
+            orden = orden[:n]
+    return d.loc[orden].reset_index(drop=True)
+
+
 def _hoja_datos(wb, tabla: str, hoja: str, campos: pd.DataFrame, dir_salida: Path) -> int | None:
     """Escribe la hoja de una tabla (completa o muestra) y devuelve el total de filas del CSV (None si es un CSV
     no versionado que aún no se ha generado)."""
@@ -187,11 +229,8 @@ def _hoja_datos(wb, tabla: str, hoja: str, campos: pd.DataFrame, dir_salida: Pat
         raise FileNotFoundError(f"Falta el CSV de salida de {tabla}: {csv}")
     df = pd.read_csv(csv, sep=";", dtype=str, encoding="utf-8")
     total = len(df)
-    nota = None
-    if total > LIMITE_FILAS_HOJA:
-        df = df.head(FILAS_MUESTRA)
-        nota = (f"Muestra: primeras {FILAS_MUESTRA} de {total} filas. "
-                f"La tabla completa está en etl/salida/{tabla}.csv")
+    df = muestra_libro(df, FILAS_MUESTRA_LIBRO)
+    nota = f"Muestra: {len(df)} de {total} filas. La tabla completa está en etl/salida/{tabla}.csv"
     df, fechas = _tipar(df, campos)
     # Hojas de import ocultas (petición del usuario, 2026-10-29); se muestran con clic derecho > Mostrar.
     _escribir(wb, hoja, df, fechas=fechas, nota=nota).sheet_state = "hidden"

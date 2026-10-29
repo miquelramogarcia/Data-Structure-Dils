@@ -69,7 +69,9 @@ Al terminar las fuentes se reconstruye `Data Dils_v2.xlsx` (hojas: Tablas, Campo
 python -c "from etl.construir_libro import construir_libro; construir_libro()"
 ```
 
-Tablas grandes: `mivau_serpavi_alquiler` (1,3 millones de filas, CSV de ~246 MB) no se versiona (está en `.gitignore`); tras clonar el repositorio hay que generarla con `python -m etl.ejecutar_todo MIVAU-SERPAVI` (descarga ~68 MB y tarda unos 2 minutos, más la construcción del libro) antes de construir el libro (si falta, el libro se construye igual y esa hoja solo lleva una nota con el comando). En el libro su hoja muestra las 100.000 primeras filas con una nota.
+El libro y los CSV: los CSV de `etl/salida/` son las tablas COMPLETAS y la fuente de la importación a MySQL; las hojas de datos del libro (ocultas: clic derecho > Mostrar) son solo una MUESTRA de cada tabla, de como mucho `FILAS_MUESTRA_LIBRO` = 1.000 filas, con la nota "Muestra: N de TOTAL filas. La tabla completa está en etl/salida/<tabla>.csv" en A1 y la cabecera en la fila 2. La columna `Filas` de la hoja Tablas da el TOTAL de filas del CSV. Regla de la muestra (`muestra_libro`, estable entre ejecuciones): orden por `fecha` descendente, `nivel` (Nacional, CCAA, Provincia, Municipio, Distrito, Seccion), `cod_territorio` e `id_registro`; cada nivel presente recibe 1.000 // nº de niveles filas (las más recientes) y el resto se rellena con las siguientes en ese orden, así aparecen todos los niveles y los periodos más recientes.
+
+Tablas grandes: `mivau_serpavi_alquiler` (1,3 millones de filas, CSV de ~246 MB) no se versiona (está en `.gitignore`); tras clonar el repositorio hay que generarla con `python -m etl.ejecutar_todo MIVAU-SERPAVI` (descarga ~68 MB y tarda unos 2 minutos, más la construcción del libro) antes de construir el libro (si falta, el libro se construye igual y esa hoja solo lleva una nota con el comando). 
 
 El libro se crea siempre desde cero (nunca se escribe `Data Dils.xlsx`); `Data Dils.xlsx` solo se lee, desde una copia temporal, para el Maestro Territorios y la hoja General.
 

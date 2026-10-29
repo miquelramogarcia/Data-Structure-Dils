@@ -79,12 +79,33 @@ def test_sin_vinculos_externos(libro_real):
 
 def test_fecha_es_fecha(libro_real):
     ws = libro_real[libro_real.sheetnames[5]]
-    cab = [c.value for c in ws[1]]
-    celda = ws.cell(2, cab.index("fecha") + 1)
+    cab = [c.value for c in ws[2]]          # fila 1: nota de muestra; fila 2: cabecera
+    celda = ws.cell(3, cab.index("fecha") + 1)
     assert isinstance(celda.value, datetime) and celda.number_format == "yyyy-mm-dd"
-    assert ws.cell(2, cab.index("cod_ccaa") + 1).number_format == "@"
-    assert ws.cell(2, cab.index("cod_ccaa") + 1).value == "00"
-    assert isinstance(ws.cell(2, cab.index("num_viviendas") + 1).value, (int, float))
+    assert ws.cell(3, cab.index("cod_ccaa") + 1).number_format == "@"
+    assert ws.cell(3, cab.index("cod_ccaa") + 1).value == "00"
+    assert isinstance(ws.cell(3, cab.index("num_viviendas") + 1).value, (int, float))
+
+
+def test_hojas_de_datos_son_muestra(libro_real):
+    # Toda hoja de datos lleva como mucho FILAS_MUESTRA_LIBRO filas y la nota con el total; Filas = total del CSV
+    tablas = libro_real["Tablas"]
+    cab = [c.value for c in tablas[1]]
+    vistas = set()
+    for r in tablas.iter_rows(min_row=2):
+        if r[1].hyperlink is None:
+            continue
+        hoja = r[1].hyperlink.location.rsplit("!", 1)[0].strip("'").replace("''", "'")
+        ws, total = libro_real[hoja], r[cab.index("Filas")].value
+        vistas.add(hoja)
+        if total is None:      # CSV no versionado aún sin generar (clon recién hecho): solo la nota
+            assert "python -m etl.ejecutar_todo" in ws["A1"].value
+            continue
+        n = min(total, cl.FILAS_MUESTRA_LIBRO)
+        assert ws["A1"].value == (f"Muestra: {n} de {total} filas. "
+                                  f"La tabla completa está en etl/salida/{r[1].value}.csv")
+        assert ws.max_row == n + 2 and ws.sheet_state == "hidden"
+    assert vistas == set(libro_real.sheetnames[5:])
 
 
 def test_general_sin_kpis_ni_errores(libro_real):
@@ -97,16 +118,45 @@ def test_general_sin_kpis_ni_errores(libro_real):
     assert not any(c.value in errores for fila in ws.iter_rows() for c in fila)
 
 
+def _serie(niveles=(("Nacional", "ES"), ("CCAA", "CA01"), ("Seccion", "SC0400101001")), anios=range(2005, 2025)):
+    """Tabla con columnas de territorio y tiempo, desordenada a propósito (secciones primero, años al revés)."""
+    filas = [{"cod_territorio": cod, "nivel": niv, "fecha": f"{a}-01-01", "valor": a}
+             for niv, cod in reversed(niveles) for a in anios]
+    return pd.DataFrame(filas)
+
+
+def test_muestra_libro_recientes_primero_y_todos_los_niveles():
+    # 60 filas, 3 niveles: cuota 10 // 3 = 3 filas por nivel (las más recientes) + 1 de relleno (la siguiente
+    # en el orden fecha desc, nivel, cod_territorio); se presentan en ese mismo orden.
+    m = cl.muestra_libro(_serie(), 10)
+    assert list(zip(m["fecha"], m["cod_territorio"])) == [
+        ("2024-01-01", "ES"), ("2024-01-01", "CA01"), ("2024-01-01", "SC0400101001"),
+        ("2023-01-01", "ES"), ("2023-01-01", "CA01"), ("2023-01-01", "SC0400101001"),
+        ("2022-01-01", "ES"), ("2022-01-01", "CA01"), ("2022-01-01", "SC0400101001"),
+        ("2021-01-01", "ES")]
+    # estable: el mismo resultado sea cual sea el orden de entrada
+    assert m.equals(cl.muestra_libro(_serie().sample(frac=1, random_state=1), 10))
+
+
+def test_muestra_libro_tabla_pequena_entera_y_sin_columnas_de_orden():
+    df = _serie(anios=range(2020, 2022))
+    assert len(cl.muestra_libro(df, 10)) == 6
+    sin = pd.DataFrame({"cod_territorio": ["ES"] * 5, "valor": range(5)})   # sin fecha ni nivel: primeras filas
+    assert cl.muestra_libro(sin, 3)["valor"].tolist() == [0, 1, 2]
+
+
 def test_tabla_grande_hoja_muestra(tmp_path, monkeypatch):
-    monkeypatch.setattr(cl, "LIMITE_FILAS_HOJA", 50)
-    monkeypatch.setattr(cl, "FILAS_MUESTRA", 10)
-    _csv(tmp_path, "grande", 60)
+    # Riesgo 5 (SERPAVI > 1.048.576 filas): la hoja es una muestra con nota, Filas = total del CSV
+    monkeypatch.setattr(cl, "FILAS_MUESTRA_LIBRO", 10)
+    _serie().to_csv(tmp_path / "grande.csv", sep=";", index=False, encoding="utf-8")
+    tablas, campos = _catalogo_sintetico(["grande"])
     salida = tmp_path / "v2.xlsx"
-    construir_libro(ORIGEN, salida, dir_salida=tmp_path, catalogo=_catalogo_sintetico(["grande"]))
+    construir_libro(ORIGEN, salida, dir_salida=tmp_path, catalogo=(tablas, campos))
     wb = load_workbook(salida)
     ws = wb["grande"]
-    assert "etl/salida/grande.csv" in ws["A1"].value
+    assert ws["A1"].value == "Muestra: 10 de 60 filas. La tabla completa está en etl/salida/grande.csv"
     assert ws.max_row == 12            # nota + cabecera + 10 filas
+    assert ws.sheet_state == "hidden"
     t = wb["Tablas"]
     cab = [c.value for c in t[1]]
     assert t.cell(2, cab.index("Filas") + 1).value == 60
@@ -148,7 +198,8 @@ def test_datasets_con_la_misma_tabla_comparten_hoja(tmp_path):
     construir_libro(ORIGEN, salida, dir_salida=tmp_path, catalogo=(tablas, campos))
     wb = load_workbook(salida)
     assert wb.sheetnames[5:] == ["compartida", "otra"]
-    assert wb["compartida"].max_row == 5            # cabecera + 4 filas, escritas una sola vez
+    assert wb["compartida"].max_row == 6            # nota + cabecera + 4 filas, escritas una sola vez
+    assert wb["compartida"]["A1"].value == "Muestra: 4 de 4 filas. La tabla completa está en etl/salida/compartida.csv"
     filas = {r[1].value: r[9].value for r in wb["Tablas"].iter_rows(min_row=2) if r[1].value}
     assert filas == {"compartida": 4, "otra": 2}
     enlaces = [r[1].hyperlink.location for r in wb["Tablas"].iter_rows(min_row=2) if r[1].value == "compartida"]
