@@ -54,3 +54,41 @@ mivau_vivienda_libre_terminadas,fecha,DATE,NO,INDEX,Primer día del periodo,2026
 mivau_vivienda_libre_terminadas,num_viviendas,INT UNSIGNED,SÍ,,Número de viviendas libres terminadas en el mes (unidad: vivienda; estimación del MIVAU). NULL si la fuente no publica el dato (ND),103
 mivau_vivienda_libre_terminadas,provisional,TINYINT(1),NO,,"1 = dato provisional, 0 = definitivo (la fuente no marca datos provisionales → 0)",0
 mivau_vivienda_libre_terminadas,fecha_descarga,DATE,NO,,Día en que se descargó el dato de la fuente,
+mivau_eti_transacciones,id_registro,VARCHAR(64),NO,PRIMARY KEY,Clave natural: cod_territorio + '_' + periodo. Igual en cada descarga: sirve para el UPSERT (longitud máx. actual: 11),PR04_2026T2
+mivau_eti_transacciones,nivel,"ENUM('Nacional','CCAA','Provincia','Municipio')",NO,INDEX,Nivel territorial del dato,Provincia
+mivau_eti_transacciones,cod_territorio,VARCHAR(8),NO,INDEX,Código territorial único (ES / CAxx / PRxx / MUxxxxx),PR04
+mivau_eti_transacciones,cod_ccaa,CHAR(2),NO,INDEX,Código INE de comunidad autónoma (00 = Nacional),01
+mivau_eti_transacciones,nombre_ccaa,VARCHAR(100),NO,,Nombre oficial INE de la comunidad autónoma (según maestro BD_Territorios),Andalucía
+mivau_eti_transacciones,cod_provincia,CHAR(2),SÍ,INDEX,Código INE de provincia (NULL en filas Nacional/CCAA),04
+mivau_eti_transacciones,nombre_provincia,VARCHAR(100),SÍ,,Nombre oficial INE de la provincia (NULL en filas Nacional/CCAA),Almería
+mivau_eti_transacciones,cod_municipio,CHAR(5),SÍ,INDEX,Código INE de municipio (NULL: la fuente no trae nivel municipal),
+mivau_eti_transacciones,nombre_municipio,VARCHAR(100),SÍ,,Nombre oficial INE del municipio (NULL: la fuente no trae nivel municipal),
+mivau_eti_transacciones,periodo,VARCHAR(7),NO,,Periodo normalizado: AAAAMmm / AAAATn / AAAA,2026T2
+mivau_eti_transacciones,frecuencia,CHAR(1),NO,,"M = mensual, T = trimestral, A = anual",T
+mivau_eti_transacciones,anio,SMALLINT UNSIGNED,NO,,Año del periodo,2026
+mivau_eti_transacciones,trimestre,TINYINT UNSIGNED,SÍ,,Trimestre (1-4); NULL en mensual y anual,2
+mivau_eti_transacciones,mes,TINYINT UNSIGNED,SÍ,,Mes (1-12); NULL en trimestral y anual,
+mivau_eti_transacciones,fecha,DATE,NO,INDEX,Primer día del periodo,2026-04-01
+mivau_eti_transacciones,num_transacciones,INT UNSIGNED,SÍ,,"Número total de transacciones inmobiliarias de vivienda (compraventas, libres y protegidas, nuevas y de segunda mano; unidad: transacción) en el trimestre. NULL si la fuente no publica el dato",4365
+mivau_eti_transacciones,provisional,TINYINT(1),NO,,"1 = dato provisional, 0 = definitivo. La fuente marca como provisional el último trimestre publicado (cabecera con '(**)')",0
+mivau_eti_transacciones,fecha_descarga,DATE,NO,,Día en que se descargó el dato de la fuente,
+mivau_eti_compradores_extranjeros,id_registro,VARCHAR(64),NO,PRIMARY KEY,Clave natural: cod_territorio + '_' + cod_ccaa_comprador + '_' + periodo. Igual en cada descarga: sirve para el UPSERT (longitud máx. actual: 14),PR28_13_2026T2
+mivau_eti_compradores_extranjeros,nivel,"ENUM('Nacional','CCAA','Provincia','Municipio')",NO,INDEX,Nivel territorial del dato,Provincia
+mivau_eti_compradores_extranjeros,cod_territorio,VARCHAR(8),NO,INDEX,Código territorial único (ES / CAxx / PRxx / MUxxxxx),PR04
+mivau_eti_compradores_extranjeros,cod_ccaa,CHAR(2),NO,INDEX,Código INE de comunidad autónoma (00 = Nacional),01
+mivau_eti_compradores_extranjeros,nombre_ccaa,VARCHAR(100),NO,,Nombre oficial INE de la comunidad autónoma (según maestro BD_Territorios),Andalucía
+mivau_eti_compradores_extranjeros,cod_provincia,CHAR(2),SÍ,INDEX,Código INE de provincia (NULL en filas Nacional/CCAA),04
+mivau_eti_compradores_extranjeros,nombre_provincia,VARCHAR(100),SÍ,,Nombre oficial INE de la provincia (NULL en filas Nacional/CCAA),Almería
+mivau_eti_compradores_extranjeros,cod_municipio,CHAR(5),SÍ,INDEX,Código INE de municipio (NULL: la fuente no trae nivel municipal),
+mivau_eti_compradores_extranjeros,nombre_municipio,VARCHAR(100),SÍ,,Nombre oficial INE del municipio (NULL: la fuente no trae nivel municipal),
+mivau_eti_compradores_extranjeros,cod_ccaa_comprador,CHAR(2),NO,INDEX,"Comunidad autónoma de residencia del comprador extranjero: código INE de 2 dígitos (01-17), 00 = total de compradores residentes en España (columna 'Residentes en España'), 99 = Ceuta y Melilla juntas (la fuente no las separa). El territorio de la fila es la ubicación de la vivienda",01
+mivau_eti_compradores_extranjeros,nombre_ccaa_comprador,VARCHAR(100),NO,,Nombre de la comunidad del comprador según el maestro (INE); 'Total residentes en España' para 00 y 'Ceuta y Melilla' para 99,Andalucía
+mivau_eti_compradores_extranjeros,periodo,VARCHAR(7),NO,,Periodo normalizado: AAAAMmm / AAAATn / AAAA,2026T2
+mivau_eti_compradores_extranjeros,frecuencia,CHAR(1),NO,,"M = mensual, T = trimestral, A = anual",T
+mivau_eti_compradores_extranjeros,anio,SMALLINT UNSIGNED,NO,,Año del periodo,2026
+mivau_eti_compradores_extranjeros,trimestre,TINYINT UNSIGNED,SÍ,,Trimestre (1-4); NULL en mensual y anual,2
+mivau_eti_compradores_extranjeros,mes,TINYINT UNSIGNED,SÍ,,Mes (1-12); NULL en trimestral y anual,
+mivau_eti_compradores_extranjeros,fecha,DATE,NO,INDEX,Primer día del periodo,2026-04-01
+mivau_eti_compradores_extranjeros,num_transacciones,INT UNSIGNED,SÍ,,"Número de transacciones inmobiliarias de vivienda realizadas por compradores extranjeros residentes (unidad: transacción) en el trimestre, según la comunidad de la vivienda (territorio) y la del comprador. NULL si la fuente deja la celda en blanco",2773
+mivau_eti_compradores_extranjeros,provisional,TINYINT(1),NO,,"1 = dato provisional, 0 = definitivo. La fuente marca como provisional el último trimestre publicado (cabecera con '(**)')",0
+mivau_eti_compradores_extranjeros,fecha_descarga,DATE,NO,,Día en que se descargó el dato de la fuente,

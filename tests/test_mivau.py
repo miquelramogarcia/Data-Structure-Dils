@@ -119,3 +119,77 @@ def test_descargar_no_200_falla(tmp_path, monkeypatch):
     with pytest.raises(RuntimeError):
         descargar("https://x.es/a/otro.XLS", "otro", tmp_path)
     assert not list(tmp_path.iterdir())
+
+
+def test_subperiodo_con_marca_de_provisional():
+    assert subperiodo("2º (**)") == ("T", 2)
+    assert subperiodo("Ene. (*)") == ("M", 1)
+    assert mivau.marca_provisional("2º (**)") is True
+    assert mivau.marca_provisional("2º") is False
+    assert mivau.marca_provisional("Ene. (p)") is True
+
+
+def test_cabecera_con_marca_de_provisional_no_pierde_columna():
+    filas = [
+        ["", "", "Año 2026", "", ""],
+        ["", "", "(trimestre)", "", ""],
+        ["", "", "1º", "2º (**)", ""],
+        ["", "A", 1.0, 2.0, ""],
+    ]
+    df = _matriz(filas)
+    assert list(df.subperiodo_txt) == ["1º", "2º (**)"]
+
+
+FIXTURE_G0 = Path(__file__).parent / "fixtures" / "340101g0.xls"
+
+
+def _hoja_cruzada(extra_pie=None):
+    filas = [
+        ["", "", "", "", ""],
+        ["", "Tabla X.", "", "", ""],
+        ["", "(**) Segundo trimestre de 2026", "", "", ""],
+        ["", "Lugar de residencia comprador/", "Residentes", "Residentes en cada una", ""],
+        ["", "Lugar de la vivienda comprada", "en", "Asturias", "Rioja(La)"],
+        ["", "", "España", "(Principado de)", ""],
+        ["", "España", 10.0, 6.0, ""],
+        ["", "Asturias (Principado de)   ", 4.0, 3.0, "-"],
+        ["", "** Datos provisionales.", "", "", ""],
+        ["", "Otra", 1.0, 1.0, 1.0],
+    ]
+    if extra_pie:
+        filas[8][1] = extra_pie
+    return filas
+
+
+def test_leer_cruzada_sintetica():
+    df = pd.DataFrame(mivau._parsear_cruzada("2t 2026", _hoja_cruzada()))
+    assert list(df.columns) == ["hoja", "anio", "trimestre", "fila_txt", "columna_txt", "valor_txt", "provisional"]
+    assert len(df) == 6  # 2 filas x 3 columnas; lo posterior al pie queda fuera
+    assert set(df.columna_txt) == {"en España", "Asturias (Principado de)", "Rioja(La)"}
+    assert (df.anio == 2026).all() and (df.trimestre == 2).all() and df.provisional.all()
+    f = df[(df.fila_txt == "Asturias (Principado de)") & (df.columna_txt == "Rioja(La)")]
+    assert f.iloc[0].valor_txt == "-" and a_numero(f.iloc[0].valor_txt) is None
+    vacia = df[(df.fila_txt == "España") & (df.columna_txt == "Rioja(La)")]
+    assert vacia.iloc[0].valor_txt == ""
+
+
+def test_leer_cruzada_sin_provisional_y_errores():
+    df = pd.DataFrame(mivau._parsear_cruzada("h", _hoja_cruzada(extra_pie="Fuente: MIVAU")))
+    assert not df.provisional.any()
+    sin_titulo = _hoja_cruzada()
+    sin_titulo[2][1] = ""
+    with pytest.raises(ValueError, match="'h'"):
+        mivau._parsear_cruzada("h", sin_titulo)
+    with pytest.raises(ValueError, match="'h'"):
+        mivau._parsear_cruzada("h", [["", "nada"]])
+
+
+def test_leer_cruzada_real():
+    df = mivau.leer_matriz_cruzada(FIXTURE_G0)
+    assert len(df) == 78 * 19 * 19
+    assert df.hoja.nunique() == 78
+    assert (df.anio.min(), df.anio.max()) == (2007, 2026)
+    f = df[(df.anio == 2007) & (df.trimestre == 1) & (df.fila_txt == "España") & (df.columna_txt == "en España")]
+    assert a_numero(f.iloc[0].valor_txt) == 10708
+    prov = df[df.provisional][["anio", "trimestre"]].drop_duplicates().values.tolist()
+    assert sorted(prov) == [[2025, 3], [2026, 2]]

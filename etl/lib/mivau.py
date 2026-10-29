@@ -18,6 +18,9 @@ _MESES_VALIDOS = {"enero": 1, "febrero": 2, "marzo": 3, "abril": 4, "mayo": 5, "
 _ROMANOS = {"i": 1, "ii": 2, "iii": 3, "iv": 4}
 _NULOS = {"", "-", "..", "."}
 _RE_ANIO = re.compile(r"(?<!\d)(?:19|20)\d{2}(?!\d)")
+_RE_MARCA = re.compile(r"\s*\(\s*(?:\*+|p)\s*\)\s*$", re.IGNORECASE)
+_ORDINALES = {"primer": 1, "primero": 1, "segundo": 2, "tercer": 3, "tercero": 3, "cuarto": 4}
+_RE_TITULO_TRIM = re.compile(r"(primer|primero|segundo|tercer|tercero|cuarto)\s+trimestre\s+de\s+((?:19|20)\d{2})")
 _RE_TRIM = re.compile(r"^(?:(?P<a>[1-4])\s*[oa]?\s*(?:t|trim|trimestre)?|(?:t|trim|trimestre)\s*(?P<b>[1-4]))$")
 
 
@@ -56,9 +59,17 @@ def _norm(txt) -> str:
     return " ".join(t.split()).rstrip(".").strip()
 
 
+def marca_provisional(txt) -> bool:
+    """True si la cabecera lleva una marca de dato provisional al final: '2º (**)', 'Ene. (*)', 'Ene. (p)'."""
+    return bool(_RE_MARCA.search(str(txt)))
+
+
 def subperiodo(txt: str) -> tuple[str, int]:
-    """('M', mes) o ('T', trimestre) a partir de 'Ene.', '1T', '3º T', 'Trimestre 1', 'I'-'IV'."""
-    t = _norm(txt)
+    """('M', mes) o ('T', trimestre) a partir de 'Ene.', '1T', '3º T', 'Trimestre 1', 'I'-'IV'.
+
+    Una marca final de provisional ('2º (**)') se ignora aquí; `marca_provisional` la detecta.
+    """
+    t = _norm(_RE_MARCA.sub("", str(txt)))
     if t in _MESES_VALIDOS:
         return ("M", _MESES_VALIDOS[t])
     m = _RE_TRIM.match(t)
@@ -190,3 +201,73 @@ def leer_matriz(path: Path, hojas: list[str] | None = None) -> pd.DataFrame:
     if not filas:
         raise ValueError(f"{Path(path).name}: ninguna hoja con cabeceras y datos")
     return pd.DataFrame(filas, columns=["hoja", "territorio_txt", "anio", "subperiodo_txt", "valor_txt"])
+
+
+def _parsear_cruzada(nombre: str, filas: list[list]) -> list[dict]:
+    """Hoja con una matriz cruzada de un solo periodo: filas = lugar de la vivienda, columnas = residencia del comprador.
+
+    Layout (boletín 340101g0): el periodo está en una celda de las primeras filas ("Primer trimestre de
+    2007", con "(**)" delante si es provisional); la cabecera empieza en la fila cuya celda dice "Lugar de
+    la vivienda comprada" y ocupa esa fila y la siguiente (los rótulos se parten en dos líneas y se
+    unen con un espacio); los datos siguen hasta la primera línea de pie. La hoja es provisional si ese
+    pie menciona "provisional". Celda vacía → valor_txt "" y texto tal cual (a_numero los pasa a None).
+    Devuelve filas largas: hoja, anio, trimestre, fila_txt, columna_txt, valor_txt, provisional.
+    """
+    periodo = None
+    for fila in filas[:15]:
+        for c in fila:
+            m = _RE_TITULO_TRIM.search(_norm(c)) if isinstance(c, str) else None
+            if m:
+                periodo = (int(m.group(2)), _ORDINALES[m.group(1)])
+                break
+        if periodo:
+            break
+    if periodo is None:
+        raise ValueError(f"Hoja {nombre!r}: no se encuentra el título con el trimestre y el año")
+    cab = col_fila = None
+    for r, fila in enumerate(filas[:30]):
+        for c, v in enumerate(fila):
+            if isinstance(v, str) and _norm(v).startswith("lugar de la vivienda"):
+                cab, col_fila = r, c
+                break
+        if cab is not None:
+            break
+    if cab is None or cab + 2 >= len(filas):
+        raise ValueError(f"Hoja {nombre!r}: no se encuentra la cabecera 'Lugar de la vivienda comprada'")
+    columnas = []
+    for c in range(col_fila + 1, len(filas[cab])):
+        rotulo = " ".join(" ".join(str(filas[x][c]).split()) for x in (cab, cab + 1) if str(filas[x][c]).strip())
+        if rotulo:
+            columnas.append((c, rotulo))
+    out, provisional = [], False
+    for fila in filas[cab + 2:]:
+        etiqueta = fila[col_fila]
+        if not (isinstance(etiqueta, str) and etiqueta.strip()):
+            continue
+        if _es_pie(etiqueta):
+            provisional = "provisional" in _norm(etiqueta)
+            break
+        out += [{"hoja": nombre, "anio": periodo[0], "trimestre": periodo[1],
+                 "fila_txt": " ".join(etiqueta.split()), "columna_txt": rotulo,
+                 "valor_txt": "" if _en_blanco(fila[c]) else _texto_valor(fila[c])}
+                for c, rotulo in columnas]
+    if not out:
+        raise ValueError(f"Hoja {nombre!r}: no se encuentran filas de datos")
+    for f in out:
+        f["provisional"] = provisional
+    return out
+
+
+def leer_matriz_cruzada(path: Path) -> pd.DataFrame:
+    """Lee un boletín MIVAU con una hoja por trimestre y matriz vivienda × comprador (340101g0).
+
+    Devuelve formato largo: hoja, anio, trimestre, fila_txt, columna_txt, valor_txt, provisional.
+    Todas las hojas deben tener la estructura (ValueError con el nombre de la hoja si no).
+    """
+    wb = xlrd.open_workbook(str(path))
+    filas = []
+    for hoja in wb.sheets():
+        matriz = [[hoja.cell_value(r, c) for c in range(hoja.ncols)] for r in range(hoja.nrows)]
+        filas += _parsear_cruzada(hoja.name.strip(), matriz)
+    return pd.DataFrame(filas, columns=["hoja", "anio", "trimestre", "fila_txt", "columna_txt",
+                                        "valor_txt", "provisional"])

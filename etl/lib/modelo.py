@@ -10,8 +10,12 @@ COLUMNAS_CONTROL = ["provisional", "fecha_descarga"]
 
 
 def construir_tabla(df: pd.DataFrame, dimensiones: list[str], medidas: list[str],
-                    fecha_descarga: date) -> pd.DataFrame:
-    """Calcula id_registro, completa provisional y fecha_descarga, y ordena las columnas."""
+                    fecha_descarga: date, descriptivas: list[str] | None = None) -> pd.DataFrame:
+    """Calcula id_registro, completa provisional y fecha_descarga, y ordena las columnas.
+
+    `descriptivas`: columnas propias que acompañan a las dimensiones (p. ej. el nombre de la comunidad del
+    comprador) pero no entran en id_registro; van justo después de las dimensiones.
+    """
     df = df.copy()
     partes = [df["cod_territorio"].astype(str)]
     partes += [df[d].astype(str) for d in dimensiones]
@@ -25,6 +29,6 @@ def construir_tabla(df: pd.DataFrame, dimensiones: list[str], medidas: list[str]
     else:
         df["provisional"] = df["provisional"].fillna(0)
     df["fecha_descarga"] = fecha_descarga
-    orden = (["id_registro"] + COLUMNAS_TERRITORIO + list(dimensiones) + COLUMNAS_TIEMPO
+    orden = (["id_registro"] + COLUMNAS_TERRITORIO + list(dimensiones) + list(descriptivas or []) + COLUMNAS_TIEMPO
              + list(medidas) + COLUMNAS_CONTROL)
     return df[orden].reset_index(drop=True)
