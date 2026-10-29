@@ -9,7 +9,7 @@ from etl.lib import mivau
 from etl.lib.modelo import construir_tabla
 from etl.lib.periodos import periodo_mensual, periodo_trimestral
 from etl.lib.territorios import expandir_uniprovinciales, normalizar, resolver
-from etl.lib.validar import validar_tabla
+from etl.lib.validar import escala_decimal, validar_tabla
 
 RAIZ = Path(__file__).resolve().parents[2]
 LIBRO = RAIZ / "Data Dils.xlsx"
@@ -40,8 +40,15 @@ def escribir_csv(df: pd.DataFrame, tabla: str, destino: Path = SALIDA) -> Path:
     return ruta
 
 
-def _clave_texto(txt: str) -> str:
-    return normalizar(txt)
+def redondear_a_escala(df: pd.DataFrame, tabla: str) -> pd.DataFrame:
+    """Redondea cada columna decimal de `df` a la escala de su DECIMAL(p,s) en campos.csv (quita el ruido de coma flotante)."""
+    _, campos = cargar_catalogo()
+    df = df.copy()
+    for _, c in campos[campos["tabla"] == tabla].iterrows():
+        escala = escala_decimal(c["tipo_mysql"])
+        if escala is not None and c["campo"] in df.columns:
+            df[c["campo"]] = pd.to_numeric(df[c["campo"]], errors="coerce").astype("float64").round(escala)
+    return df
 
 
 def tabla_final(df: pd.DataFrame, dataset_id: str, tabla: str, dimensiones: list[str], medida: str,
@@ -70,6 +77,7 @@ def tabla_final(df: pd.DataFrame, dataset_id: str, tabla: str, dimensiones: list
     for m in decimales:
         df[m] = pd.to_numeric(df[m], errors="coerce").astype("float64")
     resultado = construir_tabla(df, list(dimensiones), [medida, *extras, *decimales], fecha_descarga, descriptivas)
+    resultado = redondear_a_escala(resultado, tabla)
     try:
         validar_o_fallar(resultado, tabla, maestro)
     except ValueError as e:
@@ -90,9 +98,9 @@ def matriz_a_filas(path: Path, dataset_id: str, dimensiones: dict[str, str], med
     sola tabla antes de expandir y validar.
     """
     construir_periodo = {"M": periodo_mensual, "T": periodo_trimestral}[frecuencia]
-    ignorar = {_clave_texto(o) for o in omitir}
+    ignorar = {normalizar(o) for o in omitir}
     largo = mivau.leer_matriz(path)
-    largo = largo[~largo["territorio_txt"].map(_clave_texto).isin(ignorar)]
+    largo = largo[~largo["territorio_txt"].map(normalizar).isin(ignorar)]
     territorios = {t: resolver(maestro, t) for t in largo["territorio_txt"].unique()}
     filas = []
     for r in largo.itertuples(index=False):

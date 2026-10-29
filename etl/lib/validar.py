@@ -6,6 +6,13 @@ import pandas as pd
 _ERRORES_EXCEL = {"#REF!", "#VALUE!", "#N/A", "#DIV/0!", "#NAME?", "#NUM!", "#NULL!"}
 _RE_LONG = re.compile(r"^(?:VAR)?CHAR\((\d+)\)$", re.I)
 _RE_ENUM = re.compile(r"^ENUM\((.*)\)$", re.I | re.S)
+_RE_DECIMAL = re.compile(r"^DECIMAL\((\d+)\s*,\s*(\d+)\)$", re.I)
+
+
+def escala_decimal(tipo: str) -> int | None:
+    """Escala s de un `DECIMAL(p,s)`; None si el tipo no es DECIMAL."""
+    m = _RE_DECIMAL.match(str(tipo).strip())
+    return int(m.group(2)) if m else None
 
 
 def _es_nulo(v) -> bool:
@@ -69,6 +76,13 @@ def validar_tabla(df: pd.DataFrame, campos: pd.DataFrame, maestro: pd.DataFrame)
             if exc.any():
                 errores.append(f"longitud excedida en columna '{col}' (máx {maximo}): "
                                f"{int(exc.sum())} filas (p. ej. {_muestra(df, exc)})")
+        escala = escala_decimal(tipo)
+        if escala is not None:
+            num = pd.to_numeric(serie, errors="coerce").astype("float64")
+            largos = num.notna() & (num.round(escala) != num)
+            if largos.any():
+                errores.append(f"más decimales que la escala de {tipo} en columna '{col}': "
+                               f"{int(largos.sum())} filas (p. ej. {_muestra(df, largos)}: {num[largos].iloc[0]!r})")
         m_enum = _RE_ENUM.match(tipo)
         if m_enum:
             permitidos = set(re.findall(r"'((?:[^']|'')*)'", m_enum.group(1)))
@@ -103,14 +117,6 @@ def cuadre_jerarquico(df: pd.DataFrame, medida: str, dimensiones: list[str]) -> 
     nac = d[d["nivel"] == "Nacional"]
     ccaa = d[d["nivel"] == "CCAA"]
     prov = d[d["nivel"] == "Provincia"]
-    if not nac.empty and not ccaa.empty:
-        suma = ccaa.groupby(claves, dropna=False)[medida].sum().rename("suma_hijos").reset_index()
-        union = nac.merge(suma, on=claves, how="inner")
-        for _, f in union.iterrows():
-            dif = float(f[medida]) - float(f["suma_hijos"])
-            if abs(dif) > 1e-6:
-                resultado.append({"nivel_padre": "Nacional", "cod_padre": f["cod_territorio"],
-                                  **{k: f[k] for k in claves}, "valor_padre": float(f[medida]),
-                                  "suma_hijos": float(f["suma_hijos"]), "diferencia": dif})
+    comparar(nac, ccaa, "Nacional", [])
     comparar(ccaa, prov, "CCAA", ["cod_ccaa"])
     return pd.DataFrame(resultado, columns=columnas)

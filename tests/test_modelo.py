@@ -128,3 +128,30 @@ def test_columnas_territorio_extra_van_tras_el_municipio():
     assert list(t.columns) == (["id_registro"] + COLUMNAS_TERRITORIO + ["cod_distrito", "cod_seccion", "regimen"]
                                + COLUMNAS_TIEMPO + ["valor"] + COLUMNAS_CONTROL)
     assert t["id_registro"].iloc[0] == "PR04_TOTAL_2026M06"
+
+
+def test_validar_escala_decimal():
+    df = _tabla([_fila("PR04", 1459.3000000000002), _fila("PR11", 1459.3, mes=7)])
+    errs = validar_tabla(df, _campos(), _maestro())
+    assert any("valor" in e and "DECIMAL(12,2)" in e and "decimales" in e for e in errs)
+    assert not any("decimales" in e for e in validar_tabla(df.iloc[[1]].reset_index(drop=True), _campos(), _maestro()))
+    entero = _tabla([_fila("PR04", 3.0), _fila("PR11", None, mes=7)])
+    assert not any("decimales" in e for e in validar_tabla(entero, _campos(), _maestro()))
+
+
+def test_csv_commiteados_respetan_la_escala_decimal():
+    from pathlib import Path
+    from etl.catalogo.sql import cargar_catalogo
+    import re
+    _, campos = cargar_catalogo()
+    salida = Path(__file__).parent.parent / "etl" / "salida"
+    for ruta in sorted(salida.glob("*.csv")):
+        cs = campos[campos["tabla"] == ruta.stem]
+        decs = {c["campo"]: int(m.group(2)) for _, c in cs.iterrows()
+                if (m := re.match(r"^DECIMAL\((\d+),\s*(\d+)\)$", c["tipo_mysql"].strip(), re.I))}
+        if not decs:
+            continue
+        df = pd.read_csv(ruta, sep=";", usecols=list(decs), dtype=str, keep_default_na=False)
+        for col, escala in decs.items():
+            largos = df[col][df[col].str.contains(r"\.\d{%d,}" % (escala + 1), regex=True)]
+            assert largos.empty, (ruta.name, col, escala, largos.head(3).tolist())

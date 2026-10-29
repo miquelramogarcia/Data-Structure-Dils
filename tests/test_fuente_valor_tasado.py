@@ -75,3 +75,21 @@ def test_provisional_siempre_cero(tabla):
 
 def test_tabla_valida(tabla):
     validar_o_fallar(tabla, vt.TABLA, cargar_maestro(LIBRO))
+
+
+def test_tabla_final_redondea_decimales_a_la_escala_del_catalogo():
+    from datetime import date
+    from etl.lib.fuente_comun import tabla_final
+    from etl.lib.periodos import periodo_trimestral
+    from etl.lib.territorios import cargar_maestro
+    from etl.lib.fuente_comun import LIBRO
+    maestro = cargar_maestro(LIBRO)
+    fila = {**maestro[maestro["cod_territorio"] == "ES"].iloc[0][
+        ["nivel", "cod_territorio", "cod_ccaa", "nombre_ccaa", "cod_provincia", "nombre_provincia",
+         "cod_municipio", "nombre_municipio"]].to_dict(),
+        "antiguedad": "TOTAL", **periodo_trimestral(2026, 1), "valor_tasado_eur_m2": 1459.3000000000002,
+        "provisional": 0}
+    t = tabla_final(pd.DataFrame([fila]), "X", "mivau_valor_tasado_vivienda_libre", ["antiguedad"],
+                    "valor_tasado_eur_m2", maestro, date(2026, 10, 29), entero=False)
+    assert t.loc[0, "valor_tasado_eur_m2"] == 1459.3
+    assert "1459.3000000000002" not in t.to_csv(sep=";", index=False)
