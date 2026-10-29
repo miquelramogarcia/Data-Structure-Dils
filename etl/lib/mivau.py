@@ -271,3 +271,70 @@ def leer_matriz_cruzada(path: Path) -> pd.DataFrame:
         filas += _parsear_cruzada(hoja.name.strip(), matriz)
     return pd.DataFrame(filas, columns=["hoja", "anio", "trimestre", "fila_txt", "columna_txt",
                                         "valor_txt", "provisional"])
+
+
+def _parsear_hoja_trimestre(nombre: str, filas: list[list]) -> list[dict]:
+    """Hoja de un solo trimestre con territorios en filas y varias columnas de desglose (boletín 34020180).
+
+    Layout: el periodo está en una celda de las primeras filas ("Primer trimestre de 2019", con "(**)" delante
+    si es provisional); la cabecera es la fila cuya primera celda con texto dice "TOTAL" (las demás celdas de
+    esa fila son los rótulos de columna); la columna del territorio es la que contiene "TOTAL NACIONAL"; los
+    datos siguen hasta la primera línea de pie. La hoja es provisional si ese pie menciona "provisional".
+    Devuelve filas largas: hoja, anio, trimestre, territorio_txt, columna_txt, valor_txt, provisional.
+    """
+    periodo = None
+    for fila in filas[:15]:
+        for c in fila:
+            m = _RE_TITULO_TRIM.search(_norm(c)) if isinstance(c, str) else None
+            if m:
+                periodo = (int(m.group(2)), _ORDINALES[m.group(1)])
+                break
+        if periodo:
+            break
+    if periodo is None:
+        raise ValueError(f"Hoja {nombre!r}: no se encuentra el título con el trimestre y el año")
+    cab = None
+    for r, fila in enumerate(filas[:30]):
+        textos = [c for c in fila if isinstance(c, str) and c.strip()]
+        if textos and _norm(textos[0]) == "total":
+            cab = r
+            break
+    if cab is None:
+        raise ValueError(f"Hoja {nombre!r}: no se encuentra la fila de cabecera que empieza por 'TOTAL'")
+    columnas = [(c, " ".join(str(v).split())) for c, v in enumerate(filas[cab]) if str(v).strip()]
+    col_terr = next((c for fila in filas[cab + 1:cab + 4] for c, v in enumerate(fila)
+                     if isinstance(v, str) and _norm(v) == "total nacional"), None)
+    if col_terr is None:
+        raise ValueError(f"Hoja {nombre!r}: no se encuentra la fila 'TOTAL NACIONAL'")
+    out, provisional = [], False
+    for fila in filas[cab + 1:]:
+        etiqueta = fila[col_terr]
+        if not (isinstance(etiqueta, str) and etiqueta.strip()):
+            continue
+        if _es_pie(etiqueta):
+            provisional = "provisional" in _norm(etiqueta)
+            break
+        out += [{"hoja": nombre, "anio": periodo[0], "trimestre": periodo[1],
+                 "territorio_txt": " ".join(etiqueta.split()), "columna_txt": rotulo,
+                 "valor_txt": "" if _en_blanco(fila[c]) else _texto_valor(fila[c])}
+                for c, rotulo in columnas]
+    if not out:
+        raise ValueError(f"Hoja {nombre!r}: no se encuentran filas de datos")
+    for f in out:
+        f["provisional"] = provisional
+    return out
+
+
+def leer_hojas_trimestre(path: Path) -> pd.DataFrame:
+    """Lee un boletín MIVAU con una hoja por trimestre, territorios en filas y columnas de desglose (34020180).
+
+    Devuelve formato largo: hoja, anio, trimestre, territorio_txt, columna_txt, valor_txt, provisional.
+    Todas las hojas deben tener la estructura (ValueError con el nombre de la hoja si no).
+    """
+    wb = xlrd.open_workbook(str(path))
+    filas = []
+    for hoja in wb.sheets():
+        matriz = [[hoja.cell_value(r, c) for c in range(hoja.ncols)] for r in range(hoja.nrows)]
+        filas += _parsear_hoja_trimestre(hoja.name.strip(), matriz)
+    return pd.DataFrame(filas, columns=["hoja", "anio", "trimestre", "territorio_txt", "columna_txt",
+                                        "valor_txt", "provisional"])

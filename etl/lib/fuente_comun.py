@@ -66,16 +66,17 @@ def tabla_final(df: pd.DataFrame, dataset_id: str, tabla: str, dimensiones: list
     return resultado
 
 
-def matriz_a_tabla(path: Path, dataset_id: str, tabla: str, dimensiones: dict[str, str], medida: str,
-                   maestro: pd.DataFrame, fecha_descarga: date, entero: bool = True,
-                   frecuencia: str = "M", omitir: frozenset[str] = frozenset()) -> pd.DataFrame:
-    """Matriz de territorios del MIVAU (mensual o trimestral) → tabla validada.
+def matriz_a_filas(path: Path, dataset_id: str, dimensiones: dict[str, str], medida: str,
+                   maestro: pd.DataFrame, frecuencia: str = "M",
+                   omitir: frozenset[str] = frozenset()) -> pd.DataFrame:
+    """Matriz de territorios del MIVAU (mensual o trimestral) → filas listas para `tabla_final`.
 
-    leer_matriz → resolver → periodo → tabla_final. `dimensiones` asigna un valor fijo a cada dimensión
-    propia ({} si la fuente no tiene desglose). `frecuencia` "M" o "T": falla si alguna columna no lo es.
-    `omitir`: etiquetas de territorio que son agregados sin código INE (se comparan sin tildes ni
-    mayúsculas); cualquier otra etiqueta que no resuelva hace fallar el proceso. Una cabecera con marca
-    de provisional ("2º (**)") pone `provisional` = 1 en esas filas.
+    leer_matriz → resolver → periodo. `dimensiones` asigna un valor fijo a cada dimensión propia ({} si la
+    fuente no tiene desglose). `frecuencia` "M" o "T": falla si alguna columna no lo es. `omitir`:
+    etiquetas de territorio que son agregados sin código INE (se comparan sin tildes ni mayúsculas);
+    cualquier otra etiqueta que no resuelva hace fallar el proceso. Una cabecera con marca de provisional
+    ("2º (**)") pone `provisional` = 1 en esas filas. Sirve también para juntar varios archivos en una
+    sola tabla antes de expandir y validar.
     """
     construir_periodo = {"M": periodo_mensual, "T": periodo_trimestral}[frecuencia]
     ignorar = {_clave_texto(o) for o in omitir}
@@ -91,5 +92,12 @@ def matriz_a_tabla(path: Path, dataset_id: str, tabla: str, dimensiones: dict[st
         filas.append({**territorios[r.territorio_txt], **dimensiones,
                       **construir_periodo(int(r.anio), n), medida: mivau.a_numero(r.valor_txt),
                       "provisional": int(mivau.marca_provisional(r.subperiodo_txt))})
-    return tabla_final(pd.DataFrame(filas), dataset_id, tabla, list(dimensiones), medida, maestro,
-                       fecha_descarga, entero)
+    return pd.DataFrame(filas)
+
+
+def matriz_a_tabla(path: Path, dataset_id: str, tabla: str, dimensiones: dict[str, str], medida: str,
+                   maestro: pd.DataFrame, fecha_descarga: date, entero: bool = True,
+                   frecuencia: str = "M", omitir: frozenset[str] = frozenset()) -> pd.DataFrame:
+    """Matriz de territorios del MIVAU (mensual o trimestral) → tabla validada (`matriz_a_filas` + `tabla_final`)."""
+    filas = matriz_a_filas(path, dataset_id, dimensiones, medida, maestro, frecuencia, omitir)
+    return tabla_final(filas, dataset_id, tabla, list(dimensiones), medida, maestro, fecha_descarga, entero)

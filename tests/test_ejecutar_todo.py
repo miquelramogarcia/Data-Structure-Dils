@@ -39,3 +39,16 @@ def test_sin_fallos_no_sale_con_error(monkeypatch):
     monkeypatch.setattr(ejecutar_todo, "REGISTRO", {"FAKE-OK": _Buena})
     monkeypatch.setattr(ejecutar_todo, "construir_libro", lambda *a: None)
     ejecutar_todo.main(["FAKE-OK"])
+
+
+def test_fuente_sin_cuadre_no_lo_ejecuta(monkeypatch, capsys):
+    class _Media(_Buena):
+        CUADRE = False
+
+    def _no(*a, **k):
+        raise AssertionError("cuadre_jerarquico no debe ejecutarse")
+    monkeypatch.setattr(ejecutar_todo, "REGISTRO", {"FAKE-MEDIA": _Media})
+    monkeypatch.setattr(ejecutar_todo, "construir_libro", lambda *a: None)
+    monkeypatch.setattr(ejecutar_todo, "cuadre_jerarquico", _no)
+    ejecutar_todo.main(["FAKE-MEDIA"])
+    assert "cuadre no aplica" in capsys.readouterr().out

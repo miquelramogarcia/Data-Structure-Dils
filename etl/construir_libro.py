@@ -192,21 +192,25 @@ def construir_libro(origen: Path = Path("Data Dils.xlsx"), salida: Path = Path("
 
     con_datos = tablas[(tablas["estado"] == "con_datos") & (tablas["tabla"] != "")]
     usados: set[str] = set()
-    hojas: dict[str, str] = {}
+    hoja_de_tabla: dict[str, str] = {}   # varios datasets pueden volcar a la misma tabla: una sola hoja
     for _, t in con_datos[con_datos["hoja"] != ""].iterrows():       # los nombres ya fijados, primero
-        hojas[t["dataset_id"]] = t["hoja"]
-        usados.add(t["hoja"])
+        if hoja_de_tabla.setdefault(t["tabla"], t["hoja"]) == t["hoja"]:
+            usados.add(t["hoja"])
     for _, t in con_datos[con_datos["hoja"] == ""].iterrows():
-        hojas[t["dataset_id"]] = nombre_hoja(t["tabla"], usados)
-        usados.add(hojas[t["dataset_id"]])
+        if t["tabla"] not in hoja_de_tabla:
+            hoja_de_tabla[t["tabla"]] = nombre_hoja(t["tabla"], usados)
+            usados.add(hoja_de_tabla[t["tabla"]])
+    hojas = {t["dataset_id"]: hoja_de_tabla[t["tabla"]] for _, t in con_datos.iterrows()}
 
     wb = Workbook()
     wb.remove(wb.active)
     filas: dict[str, int] = {}
+    total_de_tabla: dict[str, int] = {}
     # Tablas necesita el nº de filas: se escriben antes las hojas de datos y se reordenan al final.
+    for tabla, hoja in hoja_de_tabla.items():
+        total_de_tabla[tabla] = _hoja_datos(wb, tabla, hoja, campos[campos["tabla"] == tabla], dir_salida)
     for _, t in con_datos.iterrows():
-        filas[t["dataset_id"]] = _hoja_datos(wb, t["tabla"], hojas[t["dataset_id"]],
-                                             campos[campos["tabla"] == t["tabla"]], dir_salida)
+        filas[t["dataset_id"]] = total_de_tabla[t["tabla"]]
     _hoja_tablas(wb, tablas, campos, hojas, filas)
     _escribir(wb, "Campos", campos.rename(columns={
         "tabla": "TABLA", "campo": "Campo", "tipo_mysql": "Tipo MySQL", "nulo": "Nulo", "clave": "Clave",
@@ -220,7 +224,7 @@ def construir_libro(origen: Path = Path("Data Dils.xlsx"), salida: Path = Path("
                                                   "fuente": "Fuente"}), superior=True, ajustar={"Definición"})
     err_kpis, errores = _hoja_general(wb, origen)
 
-    orden = ["Tablas", "Campos", "Maestro Territorios", "Glosario", "General"] + list(hojas.values())
+    orden = ["Tablas", "Campos", "Maestro Territorios", "Glosario", "General"] + list(hoja_de_tabla.values())
     wb._sheets = [wb[n] for n in orden]
     wb.active = 0
     for ws in wb.worksheets:

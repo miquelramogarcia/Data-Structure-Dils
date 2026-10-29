@@ -24,13 +24,15 @@ def main(ids: list[str]) -> None:
         fuente = REGISTRO[i]
         try:
             tabla = fuente.ejecutar(hoy)
-            cuadre = cuadre_jerarquico(tabla, fuente.MEDIDAS[0], fuente.DIMENSIONES)
+            aplica = getattr(fuente, "CUADRE", True)  # las medias (valores medios) no suman: CUADRE = False
+            cuadre = cuadre_jerarquico(tabla, fuente.MEDIDAS[0], fuente.DIMENSIONES) if aplica else None
         except Exception as e:  # una fuente rota no debe parar al resto
             print(f"ERROR {i}: {e}", file=sys.stderr)
             fallidas.append(i)
             continue
         correctas[i] = (fuente.TABLA, len(tabla))
-        print(f"{i}: {fuente.TABLA}: {len(tabla)} filas, {len(cuadre)} avisos de cuadre")
+        avisos = f"{len(cuadre)} avisos de cuadre" if cuadre is not None else "cuadre no aplica"
+        print(f"{i}: {fuente.TABLA}: {len(tabla)} filas, {avisos}")
     raiz = Path(__file__).resolve().parent.parent
     construir_libro(raiz / "Data Dils.xlsx", raiz / "Data Dils_v2.xlsx")
     print(f"Resumen: {len(correctas)} correctas, {len(fallidas)} fallidas")

@@ -55,7 +55,8 @@ def test_hipervinculo_apunta_a_hoja(libro_real):
 def test_hojas_en_orden(libro_real):
     assert libro_real.sheetnames[:5] == ["Tablas", "Campos", "Maestro Territorios", "Glosario", "General"]
     tablas, _ = cargar_catalogo()
-    assert len(libro_real.sheetnames) == 5 + int((tablas["estado"] == "con_datos").sum())
+    con_datos = tablas[tablas["estado"] == "con_datos"]
+    assert len(libro_real.sheetnames) == 5 + con_datos["tabla"].nunique()  # datasets que comparten tabla: una hoja
 
 
 def test_nombres_hoja_unicos(tmp_path):
@@ -132,3 +133,23 @@ def test_general_cuenta_errores_fuera_de_kpis(tmp_path, capsys):
     assert ws["C2"].value is None and ws["C3"].value is None
     out = capsys.readouterr().out
     assert "2 celdas con error en la columna KPIs" in out and "1 celdas con error de Excel vaciadas" in out
+
+
+def test_datasets_con_la_misma_tabla_comparten_hoja(tmp_path):
+    tablas, campos = _catalogo_sintetico(["compartida", "otra"])
+    tablas.loc[1, "tabla"] = "compartida"          # D0 y D1 -> misma tabla; D1 sustituye a "otra"
+    tablas.loc[0, "hoja"] = tablas.loc[1, "hoja"] = "compartida"
+    tablas.loc[2:, "dataset_id"] = "x"
+    tablas = pd.concat([tablas, _catalogo_sintetico(["otra"])[0].assign(dataset_id="D9")], ignore_index=True)
+    campos = pd.concat([campos, _catalogo_sintetico(["otra"])[1]], ignore_index=True).drop_duplicates()
+    _csv(tmp_path, "compartida", 4)
+    _csv(tmp_path, "otra", 2)
+    salida = tmp_path / "v2.xlsx"
+    construir_libro(ORIGEN, salida, dir_salida=tmp_path, catalogo=(tablas, campos))
+    wb = load_workbook(salida)
+    assert wb.sheetnames[5:] == ["compartida", "otra"]
+    assert wb["compartida"].max_row == 5            # cabecera + 4 filas, escritas una sola vez
+    filas = {r[1].value: r[9].value for r in wb["Tablas"].iter_rows(min_row=2) if r[1].value}
+    assert filas == {"compartida": 4, "otra": 2}
+    enlaces = [r[1].hyperlink.location for r in wb["Tablas"].iter_rows(min_row=2) if r[1].value == "compartida"]
+    assert enlaces == ["'compartida'!A1"] * 2

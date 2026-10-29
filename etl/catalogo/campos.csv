@@ -92,3 +92,23 @@ mivau_eti_compradores_extranjeros,fecha,DATE,NO,INDEX,Primer día del periodo,20
 mivau_eti_compradores_extranjeros,num_transacciones,INT UNSIGNED,SÍ,,"Número de transacciones inmobiliarias de vivienda realizadas por compradores extranjeros residentes (unidad: transacción) en el trimestre, según la comunidad de la vivienda (territorio) y la del comprador. NULL si la fuente deja la celda en blanco",2773
 mivau_eti_compradores_extranjeros,provisional,TINYINT(1),NO,,"1 = dato provisional, 0 = definitivo. La fuente marca como provisional el último trimestre publicado (cabecera con '(**)')",0
 mivau_eti_compradores_extranjeros,fecha_descarga,DATE,NO,,Día en que se descargó el dato de la fuente,
+mivau_valor_medio_vivienda_libre,id_registro,VARCHAR(64),NO,PRIMARY KEY,Clave natural: cod_territorio + '_' + tipo_comprador + '_' + antiguedad + '_' + periodo. Igual en cada descarga: sirve para el UPSERT (longitud máx. actual: 45),PR04_EXTRANJERO_RESIDENTE_SEGUNDA_MANO_2026T2
+mivau_valor_medio_vivienda_libre,nivel,"ENUM('Nacional','CCAA','Provincia','Municipio')",NO,INDEX,Nivel territorial del dato,Provincia
+mivau_valor_medio_vivienda_libre,cod_territorio,VARCHAR(8),NO,INDEX,Código territorial único (ES / CAxx / PRxx / MUxxxxx),PR04
+mivau_valor_medio_vivienda_libre,cod_ccaa,CHAR(2),NO,INDEX,Código INE de comunidad autónoma (00 = Nacional),01
+mivau_valor_medio_vivienda_libre,nombre_ccaa,VARCHAR(100),NO,,Nombre oficial INE de la comunidad autónoma (según maestro BD_Territorios),Andalucía
+mivau_valor_medio_vivienda_libre,cod_provincia,CHAR(2),SÍ,INDEX,Código INE de provincia (NULL en filas Nacional/CCAA),04
+mivau_valor_medio_vivienda_libre,nombre_provincia,VARCHAR(100),SÍ,,Nombre oficial INE de la provincia (NULL en filas Nacional/CCAA),Almería
+mivau_valor_medio_vivienda_libre,cod_municipio,CHAR(5),SÍ,INDEX,Código INE de municipio (NULL: la fuente no trae nivel municipal),
+mivau_valor_medio_vivienda_libre,nombre_municipio,VARCHAR(100),SÍ,,Nombre oficial INE del municipio (NULL: la fuente no trae nivel municipal),
+mivau_valor_medio_vivienda_libre,tipo_comprador,VARCHAR(20),NO,INDEX,Origen del comprador: TOTAL = todos los compradores (boletines 34020150/160/170); EXTRANJERO_RESIDENTE = compradores extranjeros residentes en España (boletín 34020180),EXTRANJERO_RESIDENTE
+mivau_valor_medio_vivienda_libre,antiguedad,VARCHAR(12),NO,INDEX,"Antigüedad de la vivienda libre: TOTAL (nueva + segunda mano), NUEVA o SEGUNDA_MANO",SEGUNDA_MANO
+mivau_valor_medio_vivienda_libre,periodo,VARCHAR(7),NO,,Periodo normalizado: AAAAMmm / AAAATn / AAAA,2026T2
+mivau_valor_medio_vivienda_libre,frecuencia,CHAR(1),NO,,"M = mensual, T = trimestral, A = anual",T
+mivau_valor_medio_vivienda_libre,anio,SMALLINT UNSIGNED,NO,,Año del periodo,2026
+mivau_valor_medio_vivienda_libre,trimestre,TINYINT UNSIGNED,SÍ,,Trimestre (1-4); NULL en mensual y anual,2
+mivau_valor_medio_vivienda_libre,mes,TINYINT UNSIGNED,SÍ,,Mes (1-12); NULL en trimestral y anual,
+mivau_valor_medio_vivienda_libre,fecha,DATE,NO,INDEX,Primer día del periodo,2026-04-01
+mivau_valor_medio_vivienda_libre,valor_medio_eur,"DECIMAL(12,2)",SÍ,,"Valor medio de las transacciones inmobiliarias de vivienda libre (unidad: euros por vivienda, no €/m²) en el trimestre, para el territorio, tipo de comprador y antigüedad de la fila. Es una media: no se suma entre territorios ni periodos. NULL si la fuente publica '-' o deja la celda en blanco",147992.20
+mivau_valor_medio_vivienda_libre,provisional,TINYINT(1),NO,,"1 = dato provisional, 0 = definitivo. Boletines 34020150/160/170: la fuente marca como provisional el último trimestre (cabecera '2º (**)'). Boletín 34020180: hojas cuyo pie dice 'Datos provisionales' (2024T2, 2024T4, 2026T1, 2026T2)",0
+mivau_valor_medio_vivienda_libre,fecha_descarga,DATE,NO,,Día en que se descargó el dato de la fuente,
