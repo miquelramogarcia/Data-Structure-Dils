@@ -111,7 +111,7 @@ def test_load_data_omite_generadas_y_usa_nullif():
     sql = load_data_sql("MIVAU", "t", _campos_gen())
     assert "(`id_registro`, `frecuencia`, @omitir_anio, @omitir_trimestre, `fecha`, @valor)" in sql
     assert "SET `valor` = NULLIF(@valor, '');" in sql
-    assert "LOAD DATA LOCAL INFILE 'etl/salida/t.csv' INTO TABLE `MIVAU`.`t`" in sql
+    assert "LOAD DATA LOCAL INFILE 'etl/salida/t.csv' REPLACE INTO TABLE `MIVAU`.`t`" in sql
     assert r"LINES TERMINATED BY '\n'" in sql and "IGNORE 1 LINES" in sql
     assert "ESCAPED BY ''" in sql
 
@@ -157,3 +157,15 @@ def test_escribir_csv_usa_lf(tmp_path):
     from etl.lib.fuente_comun import escribir_csv
     ruta = escribir_csv(pd.DataFrame({"a": [1, 2], "b": ["x", "y"]}), "t", tmp_path)
     assert b"\r" not in ruta.read_bytes()
+
+
+def test_escribir_carga_replace_y_show_warnings(tmp_path):
+    from etl.catalogo.sql import escribir_carga
+    destino = tmp_path / "load_data.sql"
+    escribir_carga(destino)
+    txt = destino.read_text(encoding="utf-8")
+    cargas = txt.count("LOAD DATA LOCAL INFILE")
+    assert cargas >= 1
+    assert txt.count(" REPLACE INTO TABLE ") == cargas
+    assert txt.count("SHOW WARNINGS LIMIT 20;") == cargas
+    assert "--local-infile=1" in txt and "rutas absolutas" in txt

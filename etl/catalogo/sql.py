@@ -46,7 +46,10 @@ def _sql_escapes(txt: str) -> str:
 
 
 def load_data_sql(esquema: str, tabla: str, campos: pd.DataFrame, ruta_csv: str | None = None) -> str:
-    """LOAD DATA LOCAL INFILE de `etl/salida/<tabla>.csv`.
+    """LOAD DATA LOCAL INFILE ... REPLACE de `etl/salida/<tabla>.csv`.
+
+    REPLACE actualiza las filas cuya clave primaria ya existe (UPSERT); sin él, con LOCAL MySQL las IGNORA en silencio.
+    Las filas que la fuente deja de publicar NO se borran de la tabla.
 
     MySQL rechaza valores explícitos en columnas generadas: se leen en variables `@omitir_<col>` que no se usan.
     El CSV codifica NULL como campo vacío: las columnas que admiten NULL pasan por `NULLIF(@var, '')`.
@@ -65,7 +68,7 @@ def load_data_sql(esquema: str, tabla: str, campos: pd.DataFrame, ruta_csv: str 
             cols.append(f"@{campo}")
             sets.append(f"`{campo}` = NULLIF(@{campo}, '')")
     cierre = ";" if not sets else "\nSET " + ",\n    ".join(sets) + ";"
-    return (f"LOAD DATA LOCAL INFILE '{_lit(ruta)}' INTO TABLE `{esquema}`.`{tabla}`\n"
+    return (f"LOAD DATA LOCAL INFILE '{_lit(ruta)}' REPLACE INTO TABLE `{esquema}`.`{tabla}`\n"
             f"CHARACTER SET utf8mb4 FIELDS TERMINATED BY ';' OPTIONALLY ENCLOSED BY '\"' ESCAPED BY '' "
             f"LINES TERMINATED BY '{_sql_escapes(FIN_LINEA_CSV)}'\nIGNORE 1 LINES\n(" + ", ".join(cols) + ")" + cierre)
 
@@ -116,9 +119,13 @@ def escribir_carga(salida: Path = SALIDA_CARGA) -> None:
     partes = [f"-- Generado por etl/catalogo/sql.py el {date.today().isoformat()}. No editar a mano.\n"
               "-- Ejecutar DESPUÉS de create_tables.sql, desde la raíz del proyecto y con local_infile activo\n"
               "-- (servidor: SET GLOBAL local_infile = 1; cliente: mysql --local-infile=1).\n"
+              "-- Las rutas son relativas al directorio de trabajo del CLIENTE: lanzar `mysql --local-infile=1 < sql/load_data.sql`\n"
+              "-- desde la raíz del proyecto. MySQL Workbench no resuelve rutas relativas: usar rutas absolutas.\n"
+              "-- REPLACE: las filas con clave primaria ya existente se actualizan; las que la fuente deja de publicar no se borran.\n"
               "-- anio, trimestre y mes son columnas generadas: se leen en @omitir_* y MySQL las calcula desde fecha."]
     for _, t in con_datos.drop_duplicates(["esquema", "tabla"]).iterrows():
-        partes.append(load_data_sql(t["esquema"], t["tabla"], campos[campos["tabla"] == t["tabla"]]))
+        partes.append(load_data_sql(t["esquema"], t["tabla"], campos[campos["tabla"] == t["tabla"]])
+                      + "\nSHOW WARNINGS LIMIT 20;")
     salida.parent.mkdir(parents=True, exist_ok=True)
     salida.write_text("\n\n".join(partes) + "\n", encoding="utf-8")
 
