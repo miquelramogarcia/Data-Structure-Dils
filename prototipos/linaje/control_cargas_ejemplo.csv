@@ -1,0 +1,2 @@
+id_carga;dataset_id;tabla;url;archivo;hash_sha256_archivo;fecha_descarga;inicio;fin;filas_leidas;filas_escritas;avisos_cuadre;estado;mensaje_error;version_codigo;script
+1;MIVAU-32100500;mivau_vivienda_libre_iniciadas;https://apps.fomento.gob.es/BoletinOnline2/sedal/32100500.XLS;32100500.xls;18c8876779ac47a232e06ca1eb695f5db728505c7136902332f689e9c86c9708;2026-10-29;2026-10-29 16:20:06;2026-10-29 16:20:27;13986;15984;2;OK;;b1fc4c3;prototipos.linaje.generar --ejemplo (transformar sobre tests/fixtures/32100500.xls)
