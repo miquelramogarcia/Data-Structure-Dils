@@ -5,8 +5,9 @@
 Proyecto Python (ETL) que descarga estadísticas de vivienda de fuentes públicas de España (MIVAU, Notariado, Idealista), las transforma a un formato común y genera:
 
 - un catálogo en Excel (`Data Dils_v2.xlsx`) con las hojas Tablas, Campos y una hoja de datos por tabla, con hipervínculos;
-- un fichero `sql/create_tables.sql` con un `CREATE TABLE` por tabla, listo para MySQL;
-- un CSV limpio por tabla en `etl/salida/`.
+- un fichero `sql/create_tables.sql` con un `CREATE TABLE` por tabla y `sql/load_data.sql` con su carga, listos para MySQL;
+- un CSV limpio por tabla en `etl/salida/`;
+- un glosario (`etl/catalogo/glosario.csv`, también hoja Glosario del libro) y una ficha por fuente en `docs/fuentes/`.
 
 Esquemas de base de datos: `MIVAU`, `NOTARIADO`, `IDEALISTA`.
 
@@ -18,23 +19,33 @@ El diseño completo está en `docs/2026-10-29-base-datos-vivienda-design.md` y e
 Data Dils/
   Data Dils.xlsx                  original del usuario (solo lectura; nunca se modifica)
   Data Dils_v2.xlsx               libro resultante (catálogo + hojas de datos); no se versiona
-  sql/create_tables.sql           todos los CREATE TABLE  [pendiente]
+  Libro1.xlsx                     copia antigua sin versionar (ver "Pendiente de decisión del usuario")
+  .gitattributes                  fija eol=lf para etl/salida/*.csv
+  pytest.ini, requirements.txt
+  sql/
+    create_tables.sql             esquemas y CREATE TABLE (generado desde el catálogo)
+    load_data.sql                 un LOAD DATA LOCAL INFILE por tabla con datos (generado)
   etl/
+    catalogo/                     tablas.csv, campos.csv, glosario.csv (fuente de verdad), sql.py (genera el SQL), sembrar.py (solo se usó una vez)
     descargas/                    ficheros originales descargados (no se versionan)
-    fuentes/                      un script por dataset
-    lib/                          utilidades comunes (territorios, periodos)
-    salida/                       CSV limpio por tabla  [pendiente]
-    ejecutar_todo.py              punto de entrada para regenerarlo todo  [pendiente]
-  tests/                          tests con pytest
+    fuentes/                      un módulo por fuente (mivau_*.py)
+    herramientas/                 utilidades puntuales (extraer_imagenes_xls.py, serpavi_muestra.py)
+    lib/                          utilidades comunes (territorios, periodos, validación, lectores MIVAU) y maestros en CSV (municipios_ine.csv, secciones_serpavi.csv, territorios_extra.csv)
+    salida/                       CSV limpio por tabla (el de SERPAVI no se versiona)
+    construir_libro.py            genera Data Dils_v2.xlsx
+    ejecutar_todo.py              punto de entrada para regenerarlo todo
+  tests/                          tests con pytest (fixtures/ con copias de los originales)
   docs/
     README.md                     este documento
     decisiones.md                 registro de decisiones con fecha y motivo
-    fuentes/<DATASET_ID>.md       ficha por fuente  [pendiente]
+    2026-10-29-base-datos-vivienda-design.md   diseño; plans/ trae el plan de implementación
+    fuentes/<DATASET_ID>.md       ficha por fuente (19)
+    fuentes/img/                  imágenes extraídas de los .xls (rótulos de columna)
 ```
 
 ## Catálogo y SQL
 
-El catálogo vive en `etl/catalogo/tablas.csv` y `etl/catalogo/campos.csv` (fuente de verdad, sembrado una sola vez desde el Excel del usuario con `python -m etl.catalogo.sembrar`). Para regenerar `sql/create_tables.sql` tras cambiar el catálogo:
+El catálogo vive en `etl/catalogo/tablas.csv` y `etl/catalogo/campos.csv` (fuente de verdad, sembrado una sola vez desde el Excel del usuario con `python -m etl.catalogo.sembrar`; no volver a ejecutarlo: sobrescribiría los cambios posteriores). Para regenerar `sql/create_tables.sql` tras cambiar el catálogo:
 
 ```
 python -m etl.catalogo.sql
@@ -78,6 +89,8 @@ python -m etl.ejecutar_todo                  # todas las fuentes
 python -m etl.ejecutar_todo MIVAU-31205000   # solo una
 ```
 
+Tras clonar: `python -m pip install -r requirements.txt`; como `etl/descargas/` no se versiona, el comando vuelve a descargar los originales. La ejecución completa (todas las fuentes más el libro) tarda unos 10 minutos y usa ~1,3 GB de memoria (pico ~3,4 GB al escribir el libro). SERPAVI es el único CSV no versionado (ver más abajo).
+
 Al terminar las fuentes se reconstruye `Data Dils_v2.xlsx` (hojas: Tablas, Campos, Maestro Territorios, Glosario, General y una por tabla con datos). Para regenerar solo el libro, sin volver a ejecutar las fuentes, a partir de los CSV de `etl/salida/`:
 
 ```
@@ -93,10 +106,55 @@ El libro se crea siempre desde cero (nunca se escribe `Data Dils.xlsx`); `Data D
 ## Tests
 
 ```
-pytest
+python -m pytest
 ```
 
-[pendiente] Los tests se añaden con cada tarea del plan. Mientras no existan, `pytest` termina con "no tests ran" (código de salida 5).
+La suite completa tarda unos 7 minutos. `tests/test_global.py` comprueba: 23 filas en `tablas.csv` (las que tienen esquema y tabla tienen `CREATE TABLE`; los cuatro datasets de Notariado e Idealista no tienen tabla), cabeceras de cada CSV de `etl/salida/` iguales a `campos.csv`, una ficha por cada dataset con tabla, el glosario, y que `Data Dils_v2.xlsx` (hojas ocultas incluidas) no tiene celdas con error de Excel (se salta si el libro no existe: constrúyalo antes).
+
+## Resumen de tablas (ejecución completa de 2026-10-29)
+
+Filas de cada CSV de `etl/salida/` tras `python -m etl.ejecutar_todo`. Todas las tablas con datos están en el esquema `MIVAU`.
+
+| Tabla | Datasets | Filas | Ficha |
+|---|---|---:|---|
+| `mivau_vpo_calificaciones_definitivas` | 31205000 | 15.984 | [ficha](fuentes/MIVAU-31205000.md) |
+| `mivau_vivienda_libre_iniciadas` | 32100500 | 15.984 | [ficha](fuentes/MIVAU-32100500.md) |
+| `mivau_vivienda_libre_terminadas` | 32101000 | 15.984 | [ficha](fuentes/MIVAU-32101000.md) |
+| `mivau_eti_transacciones` | 34010110 + ETI (34010120-34010190) | 58.320 | [34010110](fuentes/MIVAU-34010110.md), [ETI](fuentes/MIVAU-ETI.md) |
+| `mivau_eti_compradores_extranjeros` | 340101g0 | 37.050 | [ficha](fuentes/MIVAU-340101g0.md) |
+| `mivau_valor_medio_vivienda_libre` | 34020150, 34020160, 34020170, 34020180 | 25.920 | [34020150](fuentes/MIVAU-34020150.md), [34020160](fuentes/MIVAU-34020160.md), [34020170](fuentes/MIVAU-34020170.md), [34020180](fuentes/MIVAU-34020180.md) |
+| `mivau_valor_tasado_vivienda_libre` | 35101000, 35101500, 35102000 | 18.448 | [35101000](fuentes/MIVAU-35101000.md), [35101500](fuentes/MIVAU-35101500.md), [35102000](fuentes/MIVAU-35102000.md) |
+| `mivau_valor_tasado_municipios_25000` | 35103500 | 63.610 | [ficha](fuentes/MIVAU-35103500.md) |
+| `mivau_precio_suelo_urbano` | 36400500 | 6.120 | [ficha](fuentes/MIVAU-36400500.md) |
+| `mivau_certificados_fin_obra` | BOL09-FINOBRA | 2.912 | [ficha](fuentes/MIVAU-BOL09-FINOBRA.md) |
+| `mivau_visados_direccion_obra` | BOL09-VISADOS | 2.912 | [ficha](fuentes/MIVAU-BOL09-VISADOS.md) |
+| `mivau_serpavi_alquiler` | SERPAVI | 1.281.664 (CSV local, no versionado) | [ficha](fuentes/MIVAU-SERPAVI.md) |
+
+Total: 1.544.908 filas en 12 tablas. Sin datos (`solo_diseno`): `MIVAU-57010000` (tabla prevista `mivau_indice_costes_construccion`; columnas sin rótulo en el archivo; [ficha](fuentes/MIVAU-57010000.md)) y los cuatro datasets de Notariado e Idealista (`NOT-NP-MENSUAL`, `NOT-PEN`, `IDEALISTA-ALQUILER`, `IDEALISTA-VENTA`), sin esquema, tabla ni ficha.
+
+Avisos de la ejecución (esperados, documentados en las fichas): 7 municipios de 35103500 con la provincia heredada equivocada (`PROVINCIA_REAL`); en SERPAVI, la fila 21 de la hoja CCAA sin código, 6 filas con CPRO/CUMUN incoherentes y un recuento no entero de Valmadrid; avisos de cuadre jerárquico (2 en iniciadas, 5 en ETI, 193 en compradores extranjeros).
+
+## Pendiente de decisión del usuario
+
+Cada punto está marcado en `docs/decisiones.md` como pendiente de revisión del usuario.
+
+- **Ceuta y Melilla como agregado en `340101g0`** (compradores extranjeros): la fila de vivienda "Ceuta y Melilla" no se carga y se pierden sus cifras; ES no es la suma de las comunidades cargadas. [Ficha](fuentes/MIVAU-340101g0.md).
+- **Ceuta y Melilla en `34020180`** (valor medio, extranjeros residentes): se omite el agregado, no sus partes. [Ficha](fuentes/MIVAU-34020180.md).
+- **Ceros de `34020180`**: 4 ceros literales (vivienda nueva de Zamora 2022T3/T4 y Albacete 2024T2/T3) cargados como 0; probablemente significan "sin operaciones". [Ficha](fuentes/MIVAU-34020180.md).
+- **Ceuta y Melilla en `35101000/1500/2000`** (valor tasado): se omite el agregado; sus valores por separado sí se cargan. [Ficha](fuentes/MIVAU-35101000.md).
+- **`MIVAU-57010000`** (índice de costes): `solo_diseno`; hay que confirmar los nombres de las 13 columnas, sin rótulo en el archivo. [Ficha](fuentes/MIVAU-57010000.md).
+- **`BOL09-FINOBRA`**: rótulos de columna tomados de una imagen incrustada, no de texto del archivo. [Ficha](fuentes/MIVAU-BOL09-FINOBRA.md).
+- **`BOL09-VISADOS`**: rótulos de columna tomados de una imagen incrustada. [Ficha](fuentes/MIVAU-BOL09-VISADOS.md).
+- **Boletines ETI no cargados** (tipología del edificio, residencia del comprador, valor y superficie, etc.): decidir si interesan. [Ficha](fuentes/MIVAU-ETI.md).
+- **ETI, 18 diferencias en las sumas de la rejilla** régimen x antigüedad (lista cerrada `EXCEPCIONES_IDENTIDADES`), cargadas tal cual. [Ficha](fuentes/MIVAU-ETI.md).
+- **SERPAVI, fila 21 de la hoja CCAA** (total nacional sin etiqueta, solo recuentos): decidir si se carga como ES. [Ficha](fuentes/MIVAU-SERPAVI.md).
+- **SERPAVI, 35 diferencias de recuento entre niveles**, todas en Navarra, cargadas tal cual. [Ficha](fuentes/MIVAU-SERPAVI.md).
+
+Además:
+
+- **Tarea 15 aplazada** (Notariado e Idealista): `NOT-NP-MENSUAL`, `NOT-PEN`, `IDEALISTA-ALQUILER` e `IDEALISTA-VENTA` siguen en `solo_diseno`, sin esquema, tabla ni ficha; el usuario indicó que no interesan por ahora. Si se retoman, Idealista probablemente prohíbe la extracción automática y la vía sería su acceso oficial (decisión del 2026-10-29).
+- **Validación de la sintaxis MySQL pendiente**: no hay servidor MySQL ni MariaDB en la máquina, así que `sql/create_tables.sql` y `sql/load_data.sql` no se han ejecutado contra uno real.
+- **`Libro1.xlsx`**: copia antigua sin versionar en la raíz; preguntar al usuario antes de borrarla.
 
 ## Convenciones
 

@@ -97,6 +97,8 @@ Data Dils/
 
 El libro se regenera por script (catálogo + hojas + hipervínculos + `CREATE TABLE`) desde Campos y los CSV limpios, para que sea repetible.
 
+> Nota (Tarea 16): en el código final la carpeta `etl/scripts/` de este esquema es `etl/fuentes/` (un módulo por fuente) más `etl/lib/` (utilidades comunes), `etl/catalogo/` y `etl/herramientas/`; la estructura real está en `docs/README.md`.
+
 ## 7. Documentación (requisito explícito)
 
 - Se documenta **a medida que se avanza**, no al final: cada dataset procesado deja su ficha en `docs/fuentes/` y su línea en `decisiones.md` antes de pasar al siguiente.

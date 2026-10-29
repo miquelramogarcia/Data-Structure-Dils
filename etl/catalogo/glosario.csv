@@ -1,0 +1,35 @@
+termino,definicion,fuente
+VPO,"Vivienda de protección oficial: vivienda sujeta a un régimen de protección pública (precio y destinatarios limitados). En el proyecto, la tabla mivau_vpo_calificaciones_definitivas cuenta las calificaciones definitivas de planes estatales y autonómicos.",MIVAU
+Calificación definitiva,Acto administrativo que declara que una vivienda protegida terminada cumple los requisitos del régimen de protección. El boletín MIVAU 31205000 cuenta el número de viviendas con calificación definitiva por mes.,MIVAU
+Vivienda libre,Vivienda sin régimen de protección pública; su precio lo fija el mercado. Es el valor LIBRE de la dimensión regimen en las tablas ETI.,MIVAU
+Vivienda protegida,Vivienda sujeta a un régimen de protección pública (VPO y equivalentes autonómicos). Es el valor PROTEGIDA de la dimensión regimen en mivau_eti_transacciones.,MIVAU
+ETI,"Estadística de Transacciones Inmobiliarias del MIVAU: compraventas de vivienda formalizadas ante notario, por territorio y trimestre. Alimenta mivau_eti_transacciones, mivau_eti_compradores_extranjeros y mivau_valor_medio_vivienda_libre.",MIVAU
+Valor medio,"Valor medio de las transacciones de vivienda libre, en euros por vivienda (no por m2), de la ETI. Columna valor_medio_eur de mivau_valor_medio_vivienda_libre.",MIVAU
+Valor tasado,"Valor medio de tasación de la vivienda libre en euros por m2, de las tasaciones (estadística de valor tasado del MIVAU). Columna valor_tasado_eur_m2. No es lo mismo que el valor medio de las transacciones (euros por vivienda).",MIVAU
+Valor medio frente a valor tasado,"El valor medio sale de compraventas reales (ETI, euros por vivienda); el valor tasado sale de tasaciones de vivienda (euros por m2). Son series distintas, en tablas distintas, y no deben compararse directamente.",proyecto
+Precio de suelo urbano,"Precio medio del metro cuadrado de suelo urbano (euros/m2), trimestral por CCAA y provincia. Tabla mivau_precio_suelo_urbano; columna precio_eur_m2.",MIVAU
+Certificado de fin de obra,"Certificación del técnico director de que una obra de edificación está terminada. El boletín 09011600 cuenta las viviendas con certificado de fin de obra por promotor, mensual y nacional (mivau_certificados_fin_obra).",MIVAU
+Visado de dirección de obra,"Visado colegial del proyecto o dirección de una obra de edificación (obra nueva, ampliación o reforma). El boletín 09010600 cuenta viviendas y superficie media por tipo de obra, mensual y nacional (mivau_visados_direccion_obra).",MIVAU
+Precio asking,"Precio de oferta publicado en un anuncio, no el precio de la operación cerrada. Es la medida de los informes de Idealista; esas fuentes están catalogadas como solo_diseno y no se cargan.",proyecto
+SERPAVI,"Sistema Estatal de Referencia del Precio del Alquiler de Vivienda del MIVAU. Rentas de alquiler de vivienda habitual (explotación de datos tributarios del IRPF cruzados con el Catastro), anuales 2011-2024. Tabla mivau_serpavi_alquiler.",MIVAU
+Renta mediana,"Valor central de las rentas de alquiler de un territorio y año (la mitad de los inmuebles paga menos). SERPAVI da también los percentiles 25 y 75 (p25, p75). Las medianas no se suman entre territorios.",MIVAU
+Testigos,"Inmuebles o contratos observados para calcular una estadística. En SERPAVI el recuento (num_inmuebles_alquiler) cuenta bienes inmuebles con ingresos por arrendamiento de vivienda habitual, no contratos ni testigos.",proyecto
+Sección censal,"Unidad territorial mínima del seccionado del Censo de Población 2021 del INE. Código SC + 10 dígitos (provincia, municipio, distrito, sección). Solo aparece en mivau_serpavi_alquiler.",INE
+Distrito,Subdivisión de un municipio formada por varias secciones censales (seccionado del Censo 2021). Código DI + 7 dígitos. Solo aparece en mivau_serpavi_alquiler.,INE
+Uniprovincial,"Comunidad autónoma con una sola provincia (Madrid, Asturias, Baleares, Cantabria, Murcia, Navarra, La Rioja, Ceuta y Melilla). Si la fuente solo trae la fila de la comunidad, el proyecto genera la de provincia copiándola.",proyecto
+Código ES,cod_territorio del total nacional: ES.,proyecto
+Código CA,cod_territorio de una comunidad autónoma: CA + código INE de 2 dígitos (p. ej. CA10). Sale de Maestro Territorios.,INE
+Código PR,cod_territorio de una provincia: PR + código INE de 2 dígitos (p. ej. PR04).,INE
+Código MU,"cod_territorio de un municipio: MU + código INE de provincia (2 dígitos) y municipio (3 dígitos), 5 en total (p. ej. MU28079). Relación de municipios del INE a 1-1-2026.",INE
+Código DI,"cod_territorio de un distrito: DI + 7 dígitos (provincia, municipio y distrito del seccionado 2021).",INE
+Código SC,"cod_territorio de una sección censal: SC + 10 dígitos (provincia, municipio, distrito y sección del seccionado 2021).",INE
+Formato de periodo,"periodo se escribe AAAAMmm si es mensual (2026M06), AAAATn si es trimestral (2026T2) y AAAA si es anual (2024). frecuencia vale M, T o A. fecha es el primer día del periodo (AAAA-MM-DD).",proyecto
+Valores de nivel,"nivel indica el nivel territorial de la fila: Nacional, CCAA, Provincia o Municipio; solo en mivau_serpavi_alquiler también Distrito y Seccion.",proyecto
+Columnas generadas,"anio, trimestre y mes no se cargan: MySQL las calcula desde fecha y frecuencia (GENERATED ALWAYS AS ... STORED). Los CSV las conservan; load_data.sql las descarta. En el catálogo se marcan en la columna generado.",proyecto
+Provisional,provisional vale 1 cuando la fuente marca el dato como provisional y 0 en los demás casos (también cuando la fuente no lo indica).,proyecto
+fecha_descarga,Día en que se ejecutó el proceso que obtuvo el dato; igual en todas las filas de una carga. Una nueva carga reemplaza el valor anterior (UPSERT).,proyecto
+id_registro,"Clave natural de cada fila: cod_territorio + dimensiones propias en el orden de Campos + periodo, unidos con _ (p. ej. PR04_TOTAL_2026M06). Es estable entre descargas.",proyecto
+Muestra del libro,"Las hojas de datos de Data Dils_v2.xlsx (ocultas) son una muestra de como mucho 1.000 filas por tabla, con una nota en A1. La tabla completa está en etl/salida/<tabla>.csv y la columna Filas de la hoja Tablas da el total.",proyecto
+Estado con_datos,"Dataset descargado, transformado y cargado en su tabla, con CSV en etl/salida/.",proyecto
+Estado solo_diseno,"Dataset catalogado y, si procede, con tabla y campos diseñados, pero sin carga de datos (MIVAU-57010000 y los cuatro de Notariado e Idealista).",proyecto
+Estado pendiente,Valor previsto de la columna estado para un dataset aún sin tratar. Ningún dataset lo tiene en la entrega de la fase 1.,proyecto
