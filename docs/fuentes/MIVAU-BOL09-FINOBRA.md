@@ -12,9 +12,25 @@ https://apps.fomento.gob.es/BoletinOnline/sedal/09011600.XLS (columna `fuente` d
 Un libro .xls con una sola hoja, `APAREJA_15` (430 filas x 14 columnas). Título en B2: "15.- CERTIFICACIONES FIN DE OBRA"; B4: "N.º de viviendas según promotor. Valor de liquidación (uso residencial y no residencial)"; B6: "TOTAL NACIONAL" (único territorio).
 
 - **No hay ninguna cabecera de columna en forma de texto**: las filas 1 a 7 de las columnas de valores están vacías. Los rótulos son una imagen PNG incrustada en el .xls (1054 x 132 px). Se extrajo del flujo del libro y se leyó: PERIODO | NUMERO DE VIVIENDAS: TOTAL | PROMOTOR PRIVADO: TOTAL, PERSONAS FISICAS Y COMUNIDADES DE PROPIETARIOS, SOCIEDADES MERCANTILES, COOPERATIVAS, OTROS | ADMINISTRACIONES PUBLICAS | VALOR LIQUIDACION DE LA EJE. MATERIAL DE LAS OBRAS (miles de euros).
+![Cabecera de la tabla (imagen incrustada)](img/MIVAU-BOL09-FINOBRA_cabecera.png)
+
+Receta de extracción (reproducible): `python -m etl.herramientas.extraer_imagenes_xls tests/fixtures/09011600.xls <carpeta>` recorre el flujo Workbook del .xls, une los registros MsoDrawingGroup y guarda cada imagen (la de ~1 MB es el logotipo; la pequeña es la cabecera). Copia guardada en `docs/fuentes/img/MIVAU-BOL09-FINOBRA_cabecera.png`.
+
+| Columna de la hoja | Texto de la imagen | Columna destino |
+|---|---|---|
+| E | NUMERO DE VIVIENDAS: TOTAL | `promotor = TOTAL`, `num_viviendas` |
+| F | PROMOTOR PRIVADO: TOTAL | `PRIVADO_TOTAL` |
+| G | PERSONAS FISICAS Y COMUNIDADES DE PROPIETARIOS | `PRIVADO_PERSONAS_FISICAS` |
+| H | SOCIEDADES MERCANTILES | `PRIVADO_SOCIEDADES` |
+| I | COOPERATIVAS | `PRIVADO_COOPERATIVAS` |
+| J | OTROS | `PRIVADO_OTROS` |
+| K, L | (vacías; celdas combinadas bajo ADMINISTRACIONES PUBLICAS) | no se carga |
+| M | ADMINISTRACIONES PUBLICAS | `ADMINISTRACIONES_PUBLICAS` |
+| N | VALOR LIQUIDACION DE LA EJE. MATERIAL DE LAS OBRAS (miles de euros) | `valor_liquidacion_miles_eur` (solo `TOTAL`) |
+
 - Columna B: año; columna D: mes ("Ene" a "Dic"); valores en E a N.
 - Filas 8 a 12: totales anuales 2025 a 2021 (año sin mes). Filas 14 a 429: bloques mensuales descendentes de 2026M06 (fila 14) a 1991M11 (fila 429); el año aparece solo en la primera fila de cada bloque. Fila 430: "Fuente: M. Transportes y Movilidad Sostenible / Fecha: 28/10/2026".
-- Correspondencia columna -> significado (confirmada con las sumas, sin excepción en 416 meses): E = total; F = privado total; G = personas físicas; H = sociedades; I = cooperativas; J = otros; K y L vacías (celdas combinadas bajo la cabecera de administraciones); M = administraciones públicas; N = valor de liquidación (miles de euros).
+- Correspondencia columna -> significado (la imagen es la fuente; las sumas TOTAL = privado + administraciones y privado = cuatro tipos se cumplen en los 416 meses y comprueban solo que cada subtotal está en su sitio): E = total; F = privado total; G = personas físicas; H = sociedades; I = cooperativas; J = otros; K y L vacías (celdas combinadas bajo la cabecera de administraciones); M = administraciones públicas; N = valor de liquidación (miles de euros).
 
 ## Transformaciones
 1. `mivau.leer_serie_vertical` (lector nuevo, `etl/lib/mivau.py`) pasa la hoja a formato largo: territorio, año, mes, índice de columna, texto de la celda. Ignora las filas anuales (son la suma de sus meses).
@@ -37,7 +53,7 @@ Resultado: 2.912 filas = 7 promotores x 416 meses (1991M11 a 2026M06).
 - Solo nivel nacional. Sin marca de provisional (los últimos meses pueden revisarse en descargas posteriores; UPSERT).
 - `num_viviendas` es de uso residencial según el título; el valor de liquidación cubre uso residencial y no residencial.
 - Serie descendente que empieza en 1991M11 (no hay datos anteriores en el archivo).
-- Dependencia del mapa de columnas por posición: si el MIVAU añade o reordena columnas, el proceso falla (columna sin mapear con datos) en lugar de cargar mal.
+- Dependencia del mapa de columnas por posición. Controles en cada ejecución: (a) una columna con datos fuera del mapa hace fallar el proceso; (b) las identidades TOTAL = PRIVADO_TOTAL + ADMINISTRACIONES_PUBLICAS y PRIVADO_TOTAL = suma de sus cuatro tipos se comprueban en cada mes (`IDENTIDADES`) y, si se rompen, el proceso falla con el periodo. NO se detecta un intercambio entre partes de la misma suma (personas físicas <-> sociedades <-> cooperativas <-> otros) ni de la columna del valor de liquidación con otra que no rompa una suma; esos casos solo se verían contra la imagen.
 
 ## Valores comprobados
 - ES TOTAL 2026M06 = 39286 (celda E14 del .xls) y valor de liquidación 3.087.215,8 miles de euros (N14).

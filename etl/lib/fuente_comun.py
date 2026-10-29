@@ -116,7 +116,9 @@ def matriz_a_tabla(path: Path, dataset_id: str, tabla: str, dimensiones: dict[st
 
 def serie_vertical_a_tabla(path: Path, dataset_id: str, tabla: str, dimension: str,
                            columnas: dict[int, tuple[str, str]], maestro: pd.DataFrame, fecha_descarga: date,
-                           decimales: dict[str, int] | None = None) -> pd.DataFrame:
+                           decimales: dict[str, int] | None = None,
+                           identidades: list[tuple[str, list[str]]] | None = None,
+                           productos: list[str] | None = None, tolerancia_m2: float = 0.01) -> pd.DataFrame:
     """Serie mensual con periodos en filas y columnas sin rótulo (09010600, 09011600) → tabla validada.
 
     `columnas`: índice de columna de valores (0 = primera) -> (valor de `dimension`, nombre de la medida). El
@@ -125,6 +127,11 @@ def serie_vertical_a_tabla(path: Path, dataset_id: str, tabla: str, dimension: s
     La primera medida (por orden de aparición en `columnas`) es el recuento entero; las demás son decimales,
     redondeadas a `decimales[medida]` cifras (por defecto 4, como el DECIMAL del catálogo). Cada fila de la
     tabla es una (territorio, valor de la dimensión, mes) con todas las medidas que le correspondan.
+
+    Control en tiempo de ejecución contra columnas permutadas (`comprobar_identidades`): `identidades` lista
+    (total, [partes]) de valores de la dimensión cuyo recuento debe cumplir total = suma de partes en cada
+    mes; `productos` lista valores de la dimensión cuya segunda medida (media por unidad) x recuento debe ser un
+    número entero (dentro de `tolerancia_m2`). Si falla, ValueError con la identidad y el primer periodo.
     """
     decimales = decimales or {}
     largo = mivau.leer_serie_vertical(path)
@@ -142,11 +149,41 @@ def serie_vertical_a_tabla(path: Path, dataset_id: str, tabla: str, dimension: s
         fila = filas.setdefault(clave, {**territorios[r.territorio_txt], dimension: valor_dim,
                                         **periodo_mensual(int(r.anio), int(r.mes)), "provisional": 0})
         valor = mivau.a_numero(r.valor_txt)
-        fila[medida] = None if valor is None else (round(valor, decimales.get(medida, 4)) if medida != medidas[0]
-                                                   else valor)
+        fila[medida] = valor
     df = pd.DataFrame(list(filas.values()))
     for m in medidas:
         if m not in df.columns:
             df[m] = None
+    comprobar_identidades(df, dataset_id, dimension, medidas, identidades or [], productos or [], tolerancia_m2)
+    for m in medidas[1:]:
+        df[m] = df[m].map(lambda v: None if pd.isna(v) else round(v, decimales.get(m, 4)))
     return tabla_final(df, dataset_id, tabla, [dimension], medidas[0], maestro, fecha_descarga,
                        medidas_decimales=medidas[1:])
+
+
+def comprobar_identidades(df: pd.DataFrame, dataset_id: str, dimension: str, medidas: list[str],
+                          identidades: list[tuple[str, list[str]]], productos: list[str],
+                          tolerancia_m2: float = 0.01) -> None:
+    """Detecta columnas permutadas por cambio de estructura del archivo: ValueError con la identidad rota y el
+    primer periodo. Solo detecta permutaciones que rompen una suma; no ve intercambios entre partes de la misma
+    suma (p. ej. personas físicas <-> sociedades)."""
+    cuenta = medidas[0]
+    ancho = df.pivot_table(index=["cod_territorio", "periodo"], columns=dimension, values=cuenta, aggfunc="first")
+    for total, partes in identidades:
+        dif = (ancho[total] - ancho[partes].sum(axis=1, min_count=1)).abs()
+        malos = dif[dif > 0]
+        if len(malos):
+            terr, per = malos.index[0]
+            raise ValueError(f"{dataset_id}: identidad rota {total} = {' + '.join(partes)} en {terr} {per} "
+                             f"(diferencia {malos.iloc[0]:g}); las columnas del archivo han cambiado de orden")
+    if productos:
+        medida = medidas[1]
+        for valor_dim in productos:
+            sub = df[df[dimension] == valor_dim].dropna(subset=[cuenta, medida])
+            m2 = sub[cuenta].astype(float) * sub[medida].astype(float)
+            dif = (m2 - m2.round()).abs()
+            malos = sub[dif > tolerancia_m2]
+            if len(malos):
+                raise ValueError(f"{dataset_id}: {medida} x {cuenta} no es un número entero de m2 para {valor_dim} en "
+                                 f"{malos.iloc[0]['periodo']} (tolerancia {tolerancia_m2}); las columnas del "
+                                 f"archivo han cambiado de orden")

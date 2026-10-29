@@ -150,3 +150,38 @@ def test_tabla_final_medidas_decimales():
     t = fuente_comun.tabla_final(filas, "X", "mivau_certificados_fin_obra", ["promotor"], "num_viviendas", maestro,
                                  FECHA, medidas_decimales=["valor_liquidacion_miles_eur"])
     assert t.loc[0, "valor_liquidacion_miles_eur"] == 2.5 and str(t["num_viviendas"].dtype) == "Int64"
+
+
+def _permutado(monkeypatch, fichero, a, b):
+    """Parchea el lector para que devuelva el archivo real con las columnas `a` y `b` intercambiadas."""
+    largo = fuente_comun.mivau.leer_serie_vertical(FIXTURES / fichero)
+    largo = largo.copy()
+    ca, cb = largo["columna"] == a, largo["columna"] == b
+    largo.loc[ca, "columna"], largo.loc[cb, "columna"] = b, a
+    monkeypatch.setattr(fuente_comun.mivau, "leer_serie_vertical", lambda p: largo)
+
+
+@pytest.mark.parametrize("a,b", [(0, 1), (1, 2), (0, 8)])
+def test_fin_obra_columnas_permutadas_fallan(monkeypatch, a, b):
+    _permutado(monkeypatch, "09011600.xls", a, b)
+    with pytest.raises(ValueError, match=r"identidad rota .* en ES 1991M11|identidad rota .* en ES \d{4}M\d\d"):
+        fin.transformar(FIXTURES / "09011600.xls", FECHA)
+
+
+@pytest.mark.parametrize("a,b", [(0, 1), (2, 5), (1, 6)])
+def test_visados_columnas_permutadas_fallan_por_suma(monkeypatch, a, b):
+    _permutado(monkeypatch, "09010600.xls", a, b)
+    with pytest.raises(ValueError, match="identidad rota"):
+        visados.transformar(FIXTURES / "09010600.xls", FECHA)
+
+
+def test_visados_superficies_permutadas_fallan_por_producto(monkeypatch):
+    _permutado(monkeypatch, "09010600.xls", 7, 8)  # unifamiliar <-> bloque: las sumas de viviendas no se tocan
+    with pytest.raises(ValueError, match="no es un número entero de m2"):
+        visados.transformar(FIXTURES / "09010600.xls", FECHA)
+
+
+def test_permutacion_dentro_de_la_misma_suma_no_se_detecta(monkeypatch):
+    # Limitación documentada: personas físicas <-> sociedades no rompe ninguna identidad.
+    _permutado(monkeypatch, "09011600.xls", 2, 3)
+    fin.transformar(FIXTURES / "09011600.xls", FECHA)

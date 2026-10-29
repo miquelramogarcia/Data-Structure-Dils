@@ -27,12 +27,16 @@ COLUMNAS = {0: ("TOTAL", "num_viviendas"),
             5: ("PRIVADO_OTROS", "num_viviendas"),
             8: ("ADMINISTRACIONES_PUBLICAS", "num_viviendas"),
             9: ("TOTAL", "valor_liquidacion_miles_eur")}
+# Identidades que se comprueban en cada ejecución (total = suma de partes) para detectar columnas permutadas.
+IDENTIDADES = [("TOTAL", ["PRIVADO_TOTAL", "ADMINISTRACIONES_PUBLICAS"]),
+               ("PRIVADO_TOTAL", ["PRIVADO_PERSONAS_FISICAS", "PRIVADO_SOCIEDADES", "PRIVADO_COOPERATIVAS",
+                                  "PRIVADO_OTROS"])]
 
 
 def transformar(path: Path, fecha_descarga: date) -> pd.DataFrame:
     """Lee el boletín (sin red), resuelve el territorio, construye y valida la tabla."""
     return serie_vertical_a_tabla(path, DATASET_ID, TABLA, "promotor", COLUMNAS, cargar_maestro(LIBRO),
-                                  fecha_descarga, decimales={"valor_liquidacion_miles_eur": 1})
+                                  fecha_descarga, decimales={"valor_liquidacion_miles_eur": 1}, identidades=IDENTIDADES)
 
 
 def ejecutar(fecha_descarga: date) -> pd.DataFrame:

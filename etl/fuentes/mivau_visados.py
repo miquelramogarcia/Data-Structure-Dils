@@ -32,12 +32,18 @@ COLUMNAS = {0: ("TOTAL", "num_viviendas"),
             8: ("OBRA_NUEVA_EN_BLOQUE", "superficie_media_m2"),
             9: ("OBRA_NUEVA_OTROS_EDIFICIOS", "superficie_media_m2"),
             10: ("AMPLIACION", "superficie_media_m2")}
+# Identidades que se comprueban en cada ejecución para detectar columnas permutadas: sumas de recuentos y
+# superficie media x viviendas = m2 enteros (tolerancia 0,01 m2) en los tipos con superficie publicada.
+IDENTIDADES = [("TOTAL", ["OBRA_NUEVA", "AMPLIACION", "REFORMA_RESTAURACION"]),
+               ("OBRA_NUEVA", ["OBRA_NUEVA_UNIFAMILIAR", "OBRA_NUEVA_EN_BLOQUE", "OBRA_NUEVA_OTROS_EDIFICIOS"])]
+PRODUCTOS = ["OBRA_NUEVA_UNIFAMILIAR", "OBRA_NUEVA_EN_BLOQUE", "OBRA_NUEVA_OTROS_EDIFICIOS", "AMPLIACION"]
 
 
 def transformar(path: Path, fecha_descarga: date) -> pd.DataFrame:
     """Lee el boletín (sin red), resuelve el territorio, construye y valida la tabla."""
     return serie_vertical_a_tabla(path, DATASET_ID, TABLA, "tipo_obra", COLUMNAS, cargar_maestro(LIBRO),
-                                  fecha_descarga, decimales={"superficie_media_m2": 4})
+                                  fecha_descarga, decimales={"superficie_media_m2": 4},
+                                  identidades=IDENTIDADES, productos=PRODUCTOS)
 
 
 def ejecutar(fecha_descarga: date) -> pd.DataFrame:
