@@ -54,3 +54,26 @@ def test_expandir_uniprovinciales(M):
     assert not (out["cod_territorio"].isin(["PR04"])).any()
     # idempotente: no duplica
     assert len(expandir_uniprovinciales(out, M)) == 3
+
+
+def _df_madrid(M, v_ca, v_pr):
+    return pd.DataFrame([
+        {**resolver(M, "Madrid, Comunidad de"), "periodo": "2026M06", "valor": v_ca},
+        {**resolver(M, "Madrid", nivel="Provincia"), "periodo": "2026M06", "valor": v_pr},
+    ])
+
+
+def test_expandir_no_duplica_si_provincia_existe_con_otro_valor(M):
+    out = expandir_uniprovinciales(_df_madrid(M, 10, 11), M)
+    assert len(out) == 2
+    assert out[out["cod_territorio"] == "PR28"].iloc[0]["valor"] == 11
+
+
+def test_expandir_con_claves_explicitas(M):
+    df = _df_madrid(M, 10, 11)
+    df["otra"] = [1, 2]  # columna numérica extra que no es clave
+    assert len(expandir_uniprovinciales(df, M, claves=["periodo"])) == 2
+    # con otro periodo en la provincia, la clave no coincide y se añade
+    df.loc[1, "periodo"] = "2026M05"
+    out = expandir_uniprovinciales(df, M, claves=["periodo"])
+    assert len(out) == 3

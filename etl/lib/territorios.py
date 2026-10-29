@@ -62,9 +62,18 @@ def _clave(fila: pd.Series, cols: list[str]) -> tuple:
     return tuple(None if pd.isna(fila[c]) else fila[c] for c in cols)
 
 
-def expandir_uniprovinciales(df: pd.DataFrame, maestro: pd.DataFrame) -> pd.DataFrame:
-    """Añade la fila de provincia (copiando la de la CCAA) en las CCAA uniprovinciales si falta."""
-    otras = [c for c in df.columns if c not in COLUMNAS_TERRITORIO]
+def expandir_uniprovinciales(df: pd.DataFrame, maestro: pd.DataFrame,
+                             claves: list[str] | None = None) -> pd.DataFrame:
+    """Añade la fila de provincia (copiando la de la CCAA) en las CCAA uniprovinciales si falta.
+
+    La clave de deduplicación es la CCAA más `claves` (dimensiones + periodo). Si es None, se usan
+    todas las columnas no territoriales que no sean numéricas (las medidas nunca entran en la clave).
+    """
+    if claves is None:
+        otras = [c for c in df.columns if c not in COLUMNAS_TERRITORIO
+                 and not pd.api.types.is_numeric_dtype(df[c])]
+    else:
+        otras = list(claves)
     existentes = {(f["cod_ccaa"],) + _clave(f, otras) for _, f in df[df["nivel"] == "Provincia"].iterrows()}
     nuevas = []
     for _, f in df[(df["nivel"] == "CCAA") & df["cod_ccaa"].isin(CCAA_UNIPROVINCIALES)].iterrows():
