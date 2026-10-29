@@ -112,3 +112,42 @@ mivau_valor_medio_vivienda_libre,fecha,DATE,NO,INDEX,Primer día del periodo,202
 mivau_valor_medio_vivienda_libre,valor_medio_eur,"DECIMAL(12,2)",SÍ,,"Valor medio de las transacciones inmobiliarias de vivienda libre (unidad: euros por vivienda, no €/m²) en el trimestre, para el territorio, tipo de comprador y antigüedad de la fila. Es una media: no se suma entre territorios ni periodos. NULL si la fuente publica '-' o deja la celda en blanco",147992.20
 mivau_valor_medio_vivienda_libre,provisional,TINYINT(1),NO,,"1 = dato provisional, 0 = definitivo. Boletines 34020150/160/170: la fuente marca como provisional el último trimestre (cabecera '2º (**)'). Boletín 34020180: hojas cuyo pie dice 'Datos provisionales' (2024T2, 2024T4, 2026T1, 2026T2)",0
 mivau_valor_medio_vivienda_libre,fecha_descarga,DATE,NO,,Día en que se descargó el dato de la fuente,
+mivau_valor_tasado_vivienda_libre,id_registro,VARCHAR(64),NO,PRIMARY KEY,Clave natural: cod_territorio + '_' + antiguedad + '_' + periodo. Igual en cada descarga: sirve para el UPSERT (longitud máx. actual: 27),PR04_HASTA_5_ANOS_2026T2
+mivau_valor_tasado_vivienda_libre,nivel,"ENUM('Nacional','CCAA','Provincia','Municipio')",NO,INDEX,Nivel territorial del dato,Provincia
+mivau_valor_tasado_vivienda_libre,cod_territorio,VARCHAR(8),NO,INDEX,Código territorial único (ES / CAxx / PRxx / MUxxxxx),PR04
+mivau_valor_tasado_vivienda_libre,cod_ccaa,CHAR(2),NO,INDEX,Código INE de comunidad autónoma (00 = Nacional),01
+mivau_valor_tasado_vivienda_libre,nombre_ccaa,VARCHAR(100),NO,,Nombre oficial INE de la comunidad autónoma (según maestro BD_Territorios),Andalucía
+mivau_valor_tasado_vivienda_libre,cod_provincia,CHAR(2),SÍ,INDEX,Código INE de provincia (NULL en filas Nacional/CCAA),04
+mivau_valor_tasado_vivienda_libre,nombre_provincia,VARCHAR(100),SÍ,,Nombre oficial INE de la provincia (NULL en filas Nacional/CCAA),Almería
+mivau_valor_tasado_vivienda_libre,cod_municipio,CHAR(5),SÍ,INDEX,Código INE de municipio (NULL: la fuente no trae nivel municipal),
+mivau_valor_tasado_vivienda_libre,nombre_municipio,VARCHAR(100),SÍ,,Nombre oficial INE del municipio (NULL: la fuente no trae nivel municipal),
+mivau_valor_tasado_vivienda_libre,antiguedad,VARCHAR(12),NO,INDEX,"Antigüedad de la vivienda libre: TOTAL (nueva y usada, sin distinguir), HASTA_5_ANOS (hasta cinco años de antigüedad) o MAS_5_ANOS (más de cinco años)",HASTA_5_ANOS
+mivau_valor_tasado_vivienda_libre,periodo,VARCHAR(7),NO,,Periodo normalizado: AAAAMmm / AAAATn / AAAA,2026T2
+mivau_valor_tasado_vivienda_libre,frecuencia,CHAR(1),NO,,"M = mensual, T = trimestral, A = anual",T
+mivau_valor_tasado_vivienda_libre,anio,SMALLINT UNSIGNED,NO,,Año del periodo,2026
+mivau_valor_tasado_vivienda_libre,trimestre,TINYINT UNSIGNED,SÍ,,Trimestre (1-4); NULL en mensual y anual,2
+mivau_valor_tasado_vivienda_libre,mes,TINYINT UNSIGNED,SÍ,,Mes (1-12); NULL en trimestral y anual,
+mivau_valor_tasado_vivienda_libre,fecha,DATE,NO,INDEX,Primer día del periodo,2026-04-01
+mivau_valor_tasado_vivienda_libre,valor_tasado_eur_m2,"DECIMAL(12,2)",SÍ,,"Valor tasado medio de la vivienda libre (unidad: euros por metro cuadrado) en el trimestre, para el territorio y la antigüedad de la fila. Es una media: no se suma entre territorios ni periodos. NULL si la fuente publica 'n.r' (dato no representativo o sin observaciones) o deja la celda en blanco",1938.10
+mivau_valor_tasado_vivienda_libre,provisional,TINYINT(1),NO,,"1 = dato provisional, 0 = definitivo. Los boletines 35101000/1500/2000 no marcan ningún dato como provisional: siempre 0",0
+mivau_valor_tasado_vivienda_libre,fecha_descarga,DATE,NO,,Día en que se descargó el dato de la fuente,
+mivau_valor_tasado_municipios_25000,id_registro,VARCHAR(64),NO,PRIMARY KEY,Clave natural: cod_territorio + '_' + antiguedad + '_' + periodo. Igual en cada descarga: sirve para el UPSERT (longitud máx. actual: 27),MU04079_HASTA_5_ANOS_2026T2
+mivau_valor_tasado_municipios_25000,nivel,"ENUM('Nacional','CCAA','Provincia','Municipio')",NO,INDEX,Nivel territorial del dato,Provincia
+mivau_valor_tasado_municipios_25000,cod_territorio,VARCHAR(8),NO,INDEX,Código territorial único (ES / CAxx / PRxx / MUxxxxx),PR04
+mivau_valor_tasado_municipios_25000,cod_ccaa,CHAR(2),NO,INDEX,Código INE de comunidad autónoma (00 = Nacional),01
+mivau_valor_tasado_municipios_25000,nombre_ccaa,VARCHAR(100),NO,,Nombre oficial INE de la comunidad autónoma (según maestro BD_Territorios),Andalucía
+mivau_valor_tasado_municipios_25000,cod_provincia,CHAR(2),SÍ,INDEX,Código INE de provincia (NULL en filas Nacional/CCAA),04
+mivau_valor_tasado_municipios_25000,nombre_provincia,VARCHAR(100),SÍ,,Nombre oficial INE de la provincia (NULL en filas Nacional/CCAA),Almería
+mivau_valor_tasado_municipios_25000,cod_municipio,CHAR(5),SÍ,INDEX,Código INE de municipio de 5 dígitos (provincia + municipio); el nivel de esta fuente es siempre Municipio,04079
+mivau_valor_tasado_municipios_25000,nombre_municipio,VARCHAR(100),SÍ,,"Nombre oficial INE del municipio (relación de municipios a 1-1-2026, no el texto del boletín)",Roquetas de Mar
+mivau_valor_tasado_municipios_25000,antiguedad,VARCHAR(12),NO,INDEX,"Antigüedad de la vivienda libre: TOTAL (nueva y usada, sin distinguir), HASTA_5_ANOS (hasta cinco años de antigüedad) o MAS_5_ANOS (más de cinco años)",HASTA_5_ANOS
+mivau_valor_tasado_municipios_25000,periodo,VARCHAR(7),NO,,Periodo normalizado: AAAAMmm / AAAATn / AAAA,2026T2
+mivau_valor_tasado_municipios_25000,frecuencia,CHAR(1),NO,,"M = mensual, T = trimestral, A = anual",T
+mivau_valor_tasado_municipios_25000,anio,SMALLINT UNSIGNED,NO,,Año del periodo,2026
+mivau_valor_tasado_municipios_25000,trimestre,TINYINT UNSIGNED,SÍ,,Trimestre (1-4); NULL en mensual y anual,2
+mivau_valor_tasado_municipios_25000,mes,TINYINT UNSIGNED,SÍ,,Mes (1-12); NULL en trimestral y anual,
+mivau_valor_tasado_municipios_25000,fecha,DATE,NO,INDEX,Primer día del periodo,2026-04-01
+mivau_valor_tasado_municipios_25000,valor_tasado_eur_m2,"DECIMAL(12,2)",SÍ,,"Valor tasado medio de la vivienda libre (unidad: euros por metro cuadrado) en el municipio, trimestre y antigüedad de la fila. Es una media: no se suma entre municipios ni periodos. NULL si la fuente publica 'n.r' (dato no representativo o sin observaciones) o deja la celda en blanco",1717.20
+mivau_valor_tasado_municipios_25000,num_tasaciones,INT UNSIGNED,SÍ,,"Número de tasaciones en que se basa el valor tasado medio de la fila (municipio, trimestre y antigüedad). NULL si la celda está en blanco",552
+mivau_valor_tasado_municipios_25000,provisional,TINYINT(1),NO,,"1 = dato provisional, 0 = definitivo. El boletín 35103500 no marca ningún dato como provisional: siempre 0",0
+mivau_valor_tasado_municipios_25000,fecha_descarga,DATE,NO,,Día en que se descargó el dato de la fuente,

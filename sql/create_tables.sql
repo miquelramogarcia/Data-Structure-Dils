@@ -177,10 +177,10 @@ CREATE TABLE IF NOT EXISTS `MIVAU`.`mivau_valor_medio_vivienda_libre` (
   INDEX `idx_tipo_comprador` (`tipo_comprador`),
   INDEX `idx_antiguedad` (`antiguedad`),
   INDEX `idx_fecha` (`fecha`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci COMMENT='Estadística de Transacciones Inmobiliarias (compraventas): valor medio vivienda libre (total)';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci COMMENT='Estadística de Transacciones Inmobiliarias (compraventas): valor medio';
 
-CREATE TABLE IF NOT EXISTS `MIVAU`.`mivau_valor_medio_vivienda_libre` (
-  `id_registro` VARCHAR(64) NOT NULL COMMENT 'Clave natural: cod_territorio + ''_'' + tipo_comprador + ''_'' + antiguedad + ''_'' + periodo. Igual en cada descarga: sirve para el UPSERT (longitud máx. actual: 45)',
+CREATE TABLE IF NOT EXISTS `MIVAU`.`mivau_valor_tasado_vivienda_libre` (
+  `id_registro` VARCHAR(64) NOT NULL COMMENT 'Clave natural: cod_territorio + ''_'' + antiguedad + ''_'' + periodo. Igual en cada descarga: sirve para el UPSERT (longitud máx. actual: 27)',
   `nivel` ENUM('Nacional','CCAA','Provincia','Municipio') NOT NULL COMMENT 'Nivel territorial del dato',
   `cod_territorio` VARCHAR(8) NOT NULL COMMENT 'Código territorial único (ES / CAxx / PRxx / MUxxxxx)',
   `cod_ccaa` CHAR(2) NOT NULL COMMENT 'Código INE de comunidad autónoma (00 = Nacional)',
@@ -189,16 +189,15 @@ CREATE TABLE IF NOT EXISTS `MIVAU`.`mivau_valor_medio_vivienda_libre` (
   `nombre_provincia` VARCHAR(100) NULL COMMENT 'Nombre oficial INE de la provincia (NULL en filas Nacional/CCAA)',
   `cod_municipio` CHAR(5) NULL COMMENT 'Código INE de municipio (NULL: la fuente no trae nivel municipal)',
   `nombre_municipio` VARCHAR(100) NULL COMMENT 'Nombre oficial INE del municipio (NULL: la fuente no trae nivel municipal)',
-  `tipo_comprador` VARCHAR(20) NOT NULL COMMENT 'Origen del comprador: TOTAL = todos los compradores (boletines 34020150/160/170); EXTRANJERO_RESIDENTE = compradores extranjeros residentes en España (boletín 34020180)',
-  `antiguedad` VARCHAR(12) NOT NULL COMMENT 'Antigüedad de la vivienda libre: TOTAL (nueva + segunda mano), NUEVA o SEGUNDA_MANO',
+  `antiguedad` VARCHAR(12) NOT NULL COMMENT 'Antigüedad de la vivienda libre: TOTAL (nueva y usada, sin distinguir), HASTA_5_ANOS (hasta cinco años de antigüedad) o MAS_5_ANOS (más de cinco años)',
   `periodo` VARCHAR(7) NOT NULL COMMENT 'Periodo normalizado: AAAAMmm / AAAATn / AAAA',
   `frecuencia` CHAR(1) NOT NULL COMMENT 'M = mensual, T = trimestral, A = anual',
   `anio` SMALLINT UNSIGNED NOT NULL COMMENT 'Año del periodo',
   `trimestre` TINYINT UNSIGNED NULL COMMENT 'Trimestre (1-4); NULL en mensual y anual',
   `mes` TINYINT UNSIGNED NULL COMMENT 'Mes (1-12); NULL en trimestral y anual',
   `fecha` DATE NOT NULL COMMENT 'Primer día del periodo',
-  `valor_medio_eur` DECIMAL(12,2) NULL COMMENT 'Valor medio de las transacciones inmobiliarias de vivienda libre (unidad: euros por vivienda, no €/m²) en el trimestre, para el territorio, tipo de comprador y antigüedad de la fila. Es una media: no se suma entre territorios ni periodos. NULL si la fuente publica ''-'' o deja la celda en blanco',
-  `provisional` TINYINT(1) NOT NULL COMMENT '1 = dato provisional, 0 = definitivo. Boletines 34020150/160/170: la fuente marca como provisional el último trimestre (cabecera ''2º (**)''). Boletín 34020180: hojas cuyo pie dice ''Datos provisionales'' (2024T2, 2024T4, 2026T1, 2026T2)',
+  `valor_tasado_eur_m2` DECIMAL(12,2) NULL COMMENT 'Valor tasado medio de la vivienda libre (unidad: euros por metro cuadrado) en el trimestre, para el territorio y la antigüedad de la fila. Es una media: no se suma entre territorios ni periodos. NULL si la fuente publica ''n.r'' (dato no representativo o sin observaciones) o deja la celda en blanco',
+  `provisional` TINYINT(1) NOT NULL COMMENT '1 = dato provisional, 0 = definitivo. Los boletines 35101000/1500/2000 no marcan ningún dato como provisional: siempre 0',
   `fecha_descarga` DATE NOT NULL COMMENT 'Día en que se descargó el dato de la fuente',
   PRIMARY KEY (`id_registro`),
   INDEX `idx_nivel` (`nivel`),
@@ -206,31 +205,30 @@ CREATE TABLE IF NOT EXISTS `MIVAU`.`mivau_valor_medio_vivienda_libre` (
   INDEX `idx_cod_ccaa` (`cod_ccaa`),
   INDEX `idx_cod_provincia` (`cod_provincia`),
   INDEX `idx_cod_municipio` (`cod_municipio`),
-  INDEX `idx_tipo_comprador` (`tipo_comprador`),
   INDEX `idx_antiguedad` (`antiguedad`),
   INDEX `idx_fecha` (`fecha`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci COMMENT='Estadística de Transacciones Inmobiliarias (compraventas): valor medio vivienda libre nueva';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci COMMENT='Valor tasado de la vivienda: vivienda libre';
 
-CREATE TABLE IF NOT EXISTS `MIVAU`.`mivau_valor_medio_vivienda_libre` (
-  `id_registro` VARCHAR(64) NOT NULL COMMENT 'Clave natural: cod_territorio + ''_'' + tipo_comprador + ''_'' + antiguedad + ''_'' + periodo. Igual en cada descarga: sirve para el UPSERT (longitud máx. actual: 45)',
+CREATE TABLE IF NOT EXISTS `MIVAU`.`mivau_valor_tasado_municipios_25000` (
+  `id_registro` VARCHAR(64) NOT NULL COMMENT 'Clave natural: cod_territorio + ''_'' + antiguedad + ''_'' + periodo. Igual en cada descarga: sirve para el UPSERT (longitud máx. actual: 27)',
   `nivel` ENUM('Nacional','CCAA','Provincia','Municipio') NOT NULL COMMENT 'Nivel territorial del dato',
   `cod_territorio` VARCHAR(8) NOT NULL COMMENT 'Código territorial único (ES / CAxx / PRxx / MUxxxxx)',
   `cod_ccaa` CHAR(2) NOT NULL COMMENT 'Código INE de comunidad autónoma (00 = Nacional)',
   `nombre_ccaa` VARCHAR(100) NOT NULL COMMENT 'Nombre oficial INE de la comunidad autónoma (según maestro BD_Territorios)',
   `cod_provincia` CHAR(2) NULL COMMENT 'Código INE de provincia (NULL en filas Nacional/CCAA)',
   `nombre_provincia` VARCHAR(100) NULL COMMENT 'Nombre oficial INE de la provincia (NULL en filas Nacional/CCAA)',
-  `cod_municipio` CHAR(5) NULL COMMENT 'Código INE de municipio (NULL: la fuente no trae nivel municipal)',
-  `nombre_municipio` VARCHAR(100) NULL COMMENT 'Nombre oficial INE del municipio (NULL: la fuente no trae nivel municipal)',
-  `tipo_comprador` VARCHAR(20) NOT NULL COMMENT 'Origen del comprador: TOTAL = todos los compradores (boletines 34020150/160/170); EXTRANJERO_RESIDENTE = compradores extranjeros residentes en España (boletín 34020180)',
-  `antiguedad` VARCHAR(12) NOT NULL COMMENT 'Antigüedad de la vivienda libre: TOTAL (nueva + segunda mano), NUEVA o SEGUNDA_MANO',
+  `cod_municipio` CHAR(5) NULL COMMENT 'Código INE de municipio de 5 dígitos (provincia + municipio); el nivel de esta fuente es siempre Municipio',
+  `nombre_municipio` VARCHAR(100) NULL COMMENT 'Nombre oficial INE del municipio (relación de municipios a 1-1-2026, no el texto del boletín)',
+  `antiguedad` VARCHAR(12) NOT NULL COMMENT 'Antigüedad de la vivienda libre: TOTAL (nueva y usada, sin distinguir), HASTA_5_ANOS (hasta cinco años de antigüedad) o MAS_5_ANOS (más de cinco años)',
   `periodo` VARCHAR(7) NOT NULL COMMENT 'Periodo normalizado: AAAAMmm / AAAATn / AAAA',
   `frecuencia` CHAR(1) NOT NULL COMMENT 'M = mensual, T = trimestral, A = anual',
   `anio` SMALLINT UNSIGNED NOT NULL COMMENT 'Año del periodo',
   `trimestre` TINYINT UNSIGNED NULL COMMENT 'Trimestre (1-4); NULL en mensual y anual',
   `mes` TINYINT UNSIGNED NULL COMMENT 'Mes (1-12); NULL en trimestral y anual',
   `fecha` DATE NOT NULL COMMENT 'Primer día del periodo',
-  `valor_medio_eur` DECIMAL(12,2) NULL COMMENT 'Valor medio de las transacciones inmobiliarias de vivienda libre (unidad: euros por vivienda, no €/m²) en el trimestre, para el territorio, tipo de comprador y antigüedad de la fila. Es una media: no se suma entre territorios ni periodos. NULL si la fuente publica ''-'' o deja la celda en blanco',
-  `provisional` TINYINT(1) NOT NULL COMMENT '1 = dato provisional, 0 = definitivo. Boletines 34020150/160/170: la fuente marca como provisional el último trimestre (cabecera ''2º (**)''). Boletín 34020180: hojas cuyo pie dice ''Datos provisionales'' (2024T2, 2024T4, 2026T1, 2026T2)',
+  `valor_tasado_eur_m2` DECIMAL(12,2) NULL COMMENT 'Valor tasado medio de la vivienda libre (unidad: euros por metro cuadrado) en el municipio, trimestre y antigüedad de la fila. Es una media: no se suma entre municipios ni periodos. NULL si la fuente publica ''n.r'' (dato no representativo o sin observaciones) o deja la celda en blanco',
+  `num_tasaciones` INT UNSIGNED NULL COMMENT 'Número de tasaciones en que se basa el valor tasado medio de la fila (municipio, trimestre y antigüedad). NULL si la celda está en blanco',
+  `provisional` TINYINT(1) NOT NULL COMMENT '1 = dato provisional, 0 = definitivo. El boletín 35103500 no marca ningún dato como provisional: siempre 0',
   `fecha_descarga` DATE NOT NULL COMMENT 'Día en que se descargó el dato de la fuente',
   PRIMARY KEY (`id_registro`),
   INDEX `idx_nivel` (`nivel`),
@@ -238,39 +236,6 @@ CREATE TABLE IF NOT EXISTS `MIVAU`.`mivau_valor_medio_vivienda_libre` (
   INDEX `idx_cod_ccaa` (`cod_ccaa`),
   INDEX `idx_cod_provincia` (`cod_provincia`),
   INDEX `idx_cod_municipio` (`cod_municipio`),
-  INDEX `idx_tipo_comprador` (`tipo_comprador`),
   INDEX `idx_antiguedad` (`antiguedad`),
   INDEX `idx_fecha` (`fecha`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci COMMENT='Estadística de Transacciones Inmobiliarias (compraventas): valor medio vivienda libre segunda mano';
-
-CREATE TABLE IF NOT EXISTS `MIVAU`.`mivau_valor_medio_vivienda_libre` (
-  `id_registro` VARCHAR(64) NOT NULL COMMENT 'Clave natural: cod_territorio + ''_'' + tipo_comprador + ''_'' + antiguedad + ''_'' + periodo. Igual en cada descarga: sirve para el UPSERT (longitud máx. actual: 45)',
-  `nivel` ENUM('Nacional','CCAA','Provincia','Municipio') NOT NULL COMMENT 'Nivel territorial del dato',
-  `cod_territorio` VARCHAR(8) NOT NULL COMMENT 'Código territorial único (ES / CAxx / PRxx / MUxxxxx)',
-  `cod_ccaa` CHAR(2) NOT NULL COMMENT 'Código INE de comunidad autónoma (00 = Nacional)',
-  `nombre_ccaa` VARCHAR(100) NOT NULL COMMENT 'Nombre oficial INE de la comunidad autónoma (según maestro BD_Territorios)',
-  `cod_provincia` CHAR(2) NULL COMMENT 'Código INE de provincia (NULL en filas Nacional/CCAA)',
-  `nombre_provincia` VARCHAR(100) NULL COMMENT 'Nombre oficial INE de la provincia (NULL en filas Nacional/CCAA)',
-  `cod_municipio` CHAR(5) NULL COMMENT 'Código INE de municipio (NULL: la fuente no trae nivel municipal)',
-  `nombre_municipio` VARCHAR(100) NULL COMMENT 'Nombre oficial INE del municipio (NULL: la fuente no trae nivel municipal)',
-  `tipo_comprador` VARCHAR(20) NOT NULL COMMENT 'Origen del comprador: TOTAL = todos los compradores (boletines 34020150/160/170); EXTRANJERO_RESIDENTE = compradores extranjeros residentes en España (boletín 34020180)',
-  `antiguedad` VARCHAR(12) NOT NULL COMMENT 'Antigüedad de la vivienda libre: TOTAL (nueva + segunda mano), NUEVA o SEGUNDA_MANO',
-  `periodo` VARCHAR(7) NOT NULL COMMENT 'Periodo normalizado: AAAAMmm / AAAATn / AAAA',
-  `frecuencia` CHAR(1) NOT NULL COMMENT 'M = mensual, T = trimestral, A = anual',
-  `anio` SMALLINT UNSIGNED NOT NULL COMMENT 'Año del periodo',
-  `trimestre` TINYINT UNSIGNED NULL COMMENT 'Trimestre (1-4); NULL en mensual y anual',
-  `mes` TINYINT UNSIGNED NULL COMMENT 'Mes (1-12); NULL en trimestral y anual',
-  `fecha` DATE NOT NULL COMMENT 'Primer día del periodo',
-  `valor_medio_eur` DECIMAL(12,2) NULL COMMENT 'Valor medio de las transacciones inmobiliarias de vivienda libre (unidad: euros por vivienda, no €/m²) en el trimestre, para el territorio, tipo de comprador y antigüedad de la fila. Es una media: no se suma entre territorios ni periodos. NULL si la fuente publica ''-'' o deja la celda en blanco',
-  `provisional` TINYINT(1) NOT NULL COMMENT '1 = dato provisional, 0 = definitivo. Boletines 34020150/160/170: la fuente marca como provisional el último trimestre (cabecera ''2º (**)''). Boletín 34020180: hojas cuyo pie dice ''Datos provisionales'' (2024T2, 2024T4, 2026T1, 2026T2)',
-  `fecha_descarga` DATE NOT NULL COMMENT 'Día en que se descargó el dato de la fuente',
-  PRIMARY KEY (`id_registro`),
-  INDEX `idx_nivel` (`nivel`),
-  INDEX `idx_cod_territorio` (`cod_territorio`),
-  INDEX `idx_cod_ccaa` (`cod_ccaa`),
-  INDEX `idx_cod_provincia` (`cod_provincia`),
-  INDEX `idx_cod_municipio` (`cod_municipio`),
-  INDEX `idx_tipo_comprador` (`tipo_comprador`),
-  INDEX `idx_antiguedad` (`antiguedad`),
-  INDEX `idx_fecha` (`fecha`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci COMMENT='Estadística de Transacciones Inmobiliarias (compraventas): valor medio compras de vivienda libre por extranjeros residentes';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci COMMENT='Valor tasado de la vivienda: vivienda libre en municipios de más de 25.000 hab.';

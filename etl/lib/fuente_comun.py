@@ -46,8 +46,11 @@ def _clave_texto(txt: str) -> str:
 
 def tabla_final(df: pd.DataFrame, dataset_id: str, tabla: str, dimensiones: list[str], medida: str,
                 maestro: pd.DataFrame, fecha_descarga: date, entero: bool = True,
-                descriptivas: list[str] | None = None) -> pd.DataFrame:
+                descriptivas: list[str] | None = None,
+                medidas_enteras: list[str] | None = None) -> pd.DataFrame:
     """Filas con territorio + dimensiones + periodo + medida + provisional → tabla validada.
+
+    `medidas_enteras`: medidas adicionales (recuentos) que van tras `medida`, como Int64.
 
     expandir_uniprovinciales → construir_tabla → validar. `df` lleva ya las columnas del territorio, las
     dimensiones, las del periodo, `medida` (float o Int64) y `provisional`.
@@ -58,7 +61,10 @@ def tabla_final(df: pd.DataFrame, dataset_id: str, tabla: str, dimensiones: list
     df = expandir_uniprovinciales(df, maestro, claves=list(dimensiones) + ["periodo"])
     if entero:
         df[medida] = df[medida].astype("Int64")
-    resultado = construir_tabla(df, list(dimensiones), [medida], fecha_descarga, descriptivas)
+    extras = list(medidas_enteras or [])
+    for m in extras:
+        df[m] = df[m].round().astype("Int64")
+    resultado = construir_tabla(df, list(dimensiones), [medida, *extras], fecha_descarga, descriptivas)
     try:
         validar_o_fallar(resultado, tabla, maestro)
     except ValueError as e:

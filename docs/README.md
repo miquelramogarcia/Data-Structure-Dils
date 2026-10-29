@@ -40,7 +40,11 @@ El catálogo vive en `etl/catalogo/tablas.csv` y `etl/catalogo/campos.csv` (fuen
 python -m etl.catalogo.sql
 ```
 
-No se edita el SQL a mano. Las tablas sin campos diseñados aún se omiten.
+No se edita el SQL a mano. Las tablas sin campos diseñados aún se omiten. Cuando varios datasets comparten tabla se emite UN solo `CREATE TABLE` (y el mismo en la hoja Tablas del libro); su `COMMENT` es la columna opcional `descripcion_tabla` de `tablas.csv` si existe y, si no, la parte común (prefijo de palabras) de las `estadistica` de sus datasets.
+
+## Maestro de territorios y municipios
+
+`cargar_maestro` lee la hoja "Maestro Territorios" del usuario (Nacional, CCAA y provincias), añade `etl/lib/territorios_extra.csv` (alias de etiquetas de las fuentes) y añade `etl/lib/municipios_ine.csv`: los 8.132 municipios de la relación oficial del INE "Relación de municipios y sus códigos por comunidades autónomas y provincias", situación a 1 de enero de 2026 (`diccionario26.xlsx`, https://www.ine.es/daco/daco42/codmun/codmun.htm). El original se guarda en `etl/descargas/` (no versionado) y el CSV se regenera con `python -m etl.lib.municipios_ine_generar`. Códigos: `cod_territorio` = `MU` + CPRO + CMUN (5 dígitos); los nombres de CCAA y provincia salen del maestro del usuario. Sin `nivel`, `resolver` prefiere CCAA > Provincia > Municipio (los nombres como "Madrid" o "Soria" siguen siendo la provincia); con `nivel="Municipio"` acepta el artículo al principio o al final y cada parte de un nombre bilingüe; un nombre repetido en varias provincias da `TerritorioAmbiguo` y se resuelve con `resolver_municipio(maestro, municipio, provincia)`. La hoja "Maestro Territorios" del libro de salida no incluye los municipios (son 8.132 filas); viven en el CSV.
 
 ## Requisitos e instalación
 
