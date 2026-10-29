@@ -12,7 +12,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.hyperlink import Hyperlink
 
-from etl.catalogo.sql import DIR as DIR_CATALOGO, cargar_catalogo, create_table_sql
+from etl.catalogo.sql import DIR as DIR_CATALOGO, cargar_catalogo, create_table_sql, descripcion_tabla
 from etl.lib.territorios import cargar_maestro, leer_hoja_con_errores
 
 DIR_SALIDA = Path(__file__).parent / "salida"
@@ -125,7 +125,7 @@ def _hoja_tablas(wb, tablas, campos, hojas, filas) -> None:
         if t["esquema"] and t["tabla"]:
             cs = campos[campos["tabla"] == t["tabla"]]
             if not cs.empty:
-                sql = create_table_sql(t["esquema"], t["tabla"], cs, t["estadistica"])
+                sql = create_table_sql(t["esquema"], t["tabla"], cs, descripcion_tabla(tablas, t["esquema"], t["tabla"]))
         reg.append([t["esquema"] or None, t["tabla"] or None, t["estadistica"], t["origen"], t["fuente"],
                     t["frecuencia"], t["formato_origen"], t["prioridad"], t["estado"],
                     filas.get(t["dataset_id"]), sql or None])
