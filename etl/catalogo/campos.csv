@@ -54,7 +54,7 @@ mivau_vivienda_libre_terminadas,fecha,DATE,NO,INDEX,Primer día del periodo,2026
 mivau_vivienda_libre_terminadas,num_viviendas,INT UNSIGNED,SÍ,,Número de viviendas libres terminadas en el mes (unidad: vivienda; estimación del MIVAU). NULL si la fuente no publica el dato (ND),103
 mivau_vivienda_libre_terminadas,provisional,TINYINT(1),NO,,"1 = dato provisional, 0 = definitivo (la fuente no marca datos provisionales → 0)",0
 mivau_vivienda_libre_terminadas,fecha_descarga,DATE,NO,,Día en que se descargó el dato de la fuente,
-mivau_eti_transacciones,id_registro,VARCHAR(64),NO,PRIMARY KEY,Clave natural: cod_territorio + '_' + periodo. Igual en cada descarga: sirve para el UPSERT (longitud máx. actual: 11),PR04_2026T2
+mivau_eti_transacciones,id_registro,VARCHAR(64),NO,PRIMARY KEY,Clave natural: cod_territorio + '_' + regimen + '_' + antiguedad + '_' + periodo. Igual en cada descarga: sirve para el UPSERT (longitud máx. actual: 34),PR04_PROTEGIDA_SEGUNDA_MANO_2026T2
 mivau_eti_transacciones,nivel,"ENUM('Nacional','CCAA','Provincia','Municipio')",NO,INDEX,Nivel territorial del dato,Provincia
 mivau_eti_transacciones,cod_territorio,VARCHAR(8),NO,INDEX,Código territorial único (ES / CAxx / PRxx / MUxxxxx),PR04
 mivau_eti_transacciones,cod_ccaa,CHAR(2),NO,INDEX,Código INE de comunidad autónoma (00 = Nacional),01
@@ -63,13 +63,15 @@ mivau_eti_transacciones,cod_provincia,CHAR(2),SÍ,INDEX,Código INE de provincia
 mivau_eti_transacciones,nombre_provincia,VARCHAR(100),SÍ,,Nombre oficial INE de la provincia (NULL en filas Nacional/CCAA),Almería
 mivau_eti_transacciones,cod_municipio,CHAR(5),SÍ,INDEX,Código INE de municipio (NULL: la fuente no trae nivel municipal),
 mivau_eti_transacciones,nombre_municipio,VARCHAR(100),SÍ,,Nombre oficial INE del municipio (NULL: la fuente no trae nivel municipal),
+mivau_eti_transacciones,regimen,VARCHAR(10),NO,INDEX,"Régimen de la vivienda: TOTAL (libre + protegida), LIBRE o PROTEGIDA (boletines 34010110-34010190, ver antiguedad)",LIBRE
+mivau_eti_transacciones,antiguedad,VARCHAR(12),NO,INDEX,"Antigüedad de la vivienda: TOTAL (nueva + segunda mano), NUEVA o SEGUNDA_MANO. Cada combinación regimen x antiguedad es un boletín: TOTAL_TOTAL 34010110, LIBRE_TOTAL 34010120, LIBRE_NUEVA 34010130, LIBRE_SEGUNDA_MANO 34010140, PROTEGIDA_TOTAL 34010150, PROTEGIDA_NUEVA 34010160, PROTEGIDA_SEGUNDA_MANO 34010170, TOTAL_NUEVA 34010180, TOTAL_SEGUNDA_MANO 34010190",SEGUNDA_MANO
 mivau_eti_transacciones,periodo,VARCHAR(7),NO,,Periodo normalizado: AAAAMmm / AAAATn / AAAA,2026T2
 mivau_eti_transacciones,frecuencia,CHAR(1),NO,,"M = mensual, T = trimestral, A = anual",T
 mivau_eti_transacciones,anio,SMALLINT UNSIGNED,NO,,Año del periodo,2026
 mivau_eti_transacciones,trimestre,TINYINT UNSIGNED,SÍ,,Trimestre (1-4); NULL en mensual y anual,2
 mivau_eti_transacciones,mes,TINYINT UNSIGNED,SÍ,,Mes (1-12); NULL en trimestral y anual,
 mivau_eti_transacciones,fecha,DATE,NO,INDEX,Primer día del periodo,2026-04-01
-mivau_eti_transacciones,num_transacciones,INT UNSIGNED,SÍ,,"Número total de transacciones inmobiliarias de vivienda (compraventas, libres y protegidas, nuevas y de segunda mano; unidad: transacción) en el trimestre. NULL si la fuente no publica el dato",4365
+mivau_eti_transacciones,num_transacciones,INT UNSIGNED,SÍ,,"Número de transacciones inmobiliarias de vivienda (compraventas; unidad: transacción) del régimen y la antigüedad de la fila en el trimestre (TOTAL_TOTAL = todas). NULL si la fuente no publica el dato (celda en blanco)",4365
 mivau_eti_transacciones,provisional,TINYINT(1),NO,,"1 = dato provisional, 0 = definitivo. La fuente marca como provisional el último trimestre publicado (cabecera con '(**)')",0
 mivau_eti_transacciones,fecha_descarga,DATE,NO,,Día en que se descargó el dato de la fuente,
 mivau_eti_compradores_extranjeros,id_registro,VARCHAR(64),NO,PRIMARY KEY,Clave natural: cod_territorio + '_' + cod_ccaa_comprador + '_' + periodo. Igual en cada descarga: sirve para el UPSERT (longitud máx. actual: 14),PR28_13_2026T2
@@ -229,3 +231,33 @@ mivau_visados_direccion_obra,num_viviendas,INT UNSIGNED,SÍ,,Número de vivienda
 mivau_visados_direccion_obra,superficie_media_m2,"DECIMAL(10,4)",SÍ,,"Superficie media por vivienda de los visados del mes (unidad: m2), solo para OBRA_NUEVA_UNIFAMILIAR, OBRA_NUEVA_EN_BLOQUE, OBRA_NUEVA_OTROS_EDIFICIOS y AMPLIACION (la fuente no la publica para TOTAL, OBRA_NUEVA ni REFORMA_RESTAURACION). Es una media: no se suma. NULL si la fuente publica '-' (mes sin viviendas de ese tipo) o no la publica",97.9338
 mivau_visados_direccion_obra,provisional,TINYINT(1),NO,,"1 = dato provisional, 0 = definitivo. La fuente no marca ningún mes como provisional: siempre 0",0
 mivau_visados_direccion_obra,fecha_descarga,DATE,NO,,Día en que se descargó el dato de la fuente,
+mivau_serpavi_alquiler,id_registro,VARCHAR(64),NO,PRIMARY KEY,Clave natural: cod_territorio + '_' + tipologia + '_' + periodo. Igual en cada descarga: sirve para el UPSERT (longitud máx. actual: 29),SC5100101001_COLECTIVA_2024
+mivau_serpavi_alquiler,nivel,"ENUM('Nacional','CCAA','Provincia','Municipio','Distrito','Seccion')",NO,INDEX,Nivel territorial del dato. Esta tabla añade Distrito (distrito censal) y Seccion (sección censal); SERPAVI no trae fila Nacional con etiqueta,Seccion
+mivau_serpavi_alquiler,cod_territorio,VARCHAR(12),NO,INDEX,Código territorial único (CAxx / PRxx / MUxxxxx / DI + 7 dígitos del distrito censal / SC + 10 dígitos de la sección censal); códigos INE del seccionado del Censo 2021,SC5100101001
+mivau_serpavi_alquiler,cod_ccaa,CHAR(2),NO,INDEX,Código INE de comunidad autónoma (00 = Nacional),18
+mivau_serpavi_alquiler,nombre_ccaa,VARCHAR(100),NO,,Nombre oficial INE de la comunidad autónoma (según maestro BD_Territorios),Ceuta
+mivau_serpavi_alquiler,cod_provincia,CHAR(2),SÍ,INDEX,Código INE de provincia (NULL en filas CCAA),51
+mivau_serpavi_alquiler,nombre_provincia,VARCHAR(100),SÍ,,Nombre oficial INE de la provincia (NULL en filas CCAA),Ceuta
+mivau_serpavi_alquiler,cod_municipio,CHAR(5),SÍ,INDEX,"Código INE de municipio de 5 dígitos (provincia + municipio); en filas Distrito y Seccion, el municipio al que pertenecen (primeros 5 dígitos del código). NULL en filas CCAA y Provincia",51001
+mivau_serpavi_alquiler,nombre_municipio,VARCHAR(100),SÍ,,"Nombre oficial INE del municipio (relación de municipios a 1-1-2026, no el texto del archivo). NULL en filas CCAA y Provincia",Ceuta
+mivau_serpavi_alquiler,cod_distrito,CHAR(7),SÍ,INDEX,"Código INE del distrito censal (CPRO + CMUN + DIST, 7 dígitos; seccionado del Censo 2021) en filas Distrito y Seccion; NULL en el resto. Columna propia de esta tabla",5100101
+mivau_serpavi_alquiler,cod_seccion,CHAR(10),SÍ,INDEX,"Código INE de la sección censal (CPRO + CMUN + DIST + SECC, 10 dígitos; CUSEC del Censo 2021) en filas Seccion; NULL en el resto. Columna propia de esta tabla",5100101001
+mivau_serpavi_alquiler,tipologia,VARCHAR(12),NO,INDEX,"Tipología de la vivienda (la de más superficie del inmueble, grupo GGT01 del Catastro): COLECTIVA (VC, vivienda colectiva) o UNIFAMILIAR (VU, vivienda unifamiliar o rural). El archivo no trae total de ambas",COLECTIVA
+mivau_serpavi_alquiler,periodo,VARCHAR(7),NO,,Periodo normalizado: AAAAMmm / AAAATn / AAAA,2024
+mivau_serpavi_alquiler,frecuencia,CHAR(1),NO,,"M = mensual, T = trimestral, A = anual",A
+mivau_serpavi_alquiler,anio,SMALLINT UNSIGNED,NO,,"Año del periodo (año de las rentas declaradas en el IRPF, modelo 100)",2024
+mivau_serpavi_alquiler,trimestre,TINYINT UNSIGNED,SÍ,,Trimestre (1-4); NULL en mensual y anual,
+mivau_serpavi_alquiler,mes,TINYINT UNSIGNED,SÍ,,Mes (1-12); NULL en trimestral y anual,
+mivau_serpavi_alquiler,fecha,DATE,NO,INDEX,Primer día del periodo,2024-01-01
+mivau_serpavi_alquiler,renta_mediana_eur_m2_mes,"DECIMAL(10,2)",SÍ,,"Alquiler mensual por metro cuadrado, mediana (unidad: euros por m2 y mes; columna ALQM2_LV_M_V*_AA, metadatos 'ALQM2mes_LV_M'), redondeado a 2 decimales. Mediana: no se suma ni se promedia entre territorios. NULL si la celda está vacía (secreto estadístico o sin datos)",11.86
+mivau_serpavi_alquiler,renta_p25_eur_m2_mes,"DECIMAL(10,2)",SÍ,,"Alquiler mensual por metro cuadrado, percentil 25 (euros por m2 y mes; ALQM2_LV_25_V*_AA), 2 decimales. NULL si la celda está vacía",8.89
+mivau_serpavi_alquiler,renta_p75_eur_m2_mes,"DECIMAL(10,2)",SÍ,,"Alquiler mensual por metro cuadrado, percentil 75 (euros por m2 y mes; ALQM2_LV_75_V*_AA), 2 decimales. NULL si la celda está vacía",14.86
+mivau_serpavi_alquiler,renta_mediana_eur_mes,"DECIMAL(12,2)",SÍ,,"Alquiler mensual de todo el inmueble, mediana (unidad: euros al mes; ALQTBID12_M_V*_AA), 2 decimales. NULL si la celda está vacía",751.28
+mivau_serpavi_alquiler,renta_p25_eur_mes,"DECIMAL(12,2)",SÍ,,"Alquiler mensual de todo el inmueble, percentil 25 (euros al mes; ALQTBID12_25_V*_AA), 2 decimales. NULL si la celda está vacía",675.00
+mivau_serpavi_alquiler,renta_p75_eur_mes,"DECIMAL(12,2)",SÍ,,"Alquiler mensual de todo el inmueble, percentil 75 (euros al mes; ALQTBID12_75_V*_AA), 2 decimales. NULL si la celda está vacía",901.34
+mivau_serpavi_alquiler,superficie_mediana_m2,"DECIMAL(10,2)",SÍ,,"Superficie del inmueble alquilado, mediana (unidad: metros cuadrados; SLVM2_M_V*_AA), 2 decimales. NULL si la celda está vacía",73.00
+mivau_serpavi_alquiler,superficie_p25_m2,"DECIMAL(10,2)",SÍ,,"Superficie del inmueble alquilado, percentil 25 (m2; SLVM2_25_V*_AA), 2 decimales. NULL si la celda está vacía",51.00
+mivau_serpavi_alquiler,superficie_p75_m2,"DECIMAL(10,2)",SÍ,,"Superficie del inmueble alquilado, percentil 75 (m2; SLVM2_75_V*_AA), 2 decimales. NULL si la celda está vacía",103.00
+mivau_serpavi_alquiler,num_inmuebles_alquiler,INT UNSIGNED,SÍ,,"Número de bienes inmuebles del subconjunto de alquiler (con ingresos por arrendamiento de vivienda habitual, excluido el alquiler a parientes, y con dato tributario y catastral) de la tipología de la fila (columna BI_ALVHEPCO_TV*_AA). Es un recuento: sección -> distrito -> municipio -> provincia -> CCAA suman (salvo 35 diferencias de la fuente en Navarra). NULL si la celda está vacía",107
+mivau_serpavi_alquiler,provisional,TINYINT(1),NO,,"1 = dato provisional, 0 = definitivo. SERPAVI no marca datos provisionales: siempre 0",0
+mivau_serpavi_alquiler,fecha_descarga,DATE,NO,,Día en que se descargó el dato de la fuente,

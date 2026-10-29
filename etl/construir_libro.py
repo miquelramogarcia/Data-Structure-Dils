@@ -24,6 +24,9 @@ ANCHO_MAX = 60
 ANCHO_CREATE = 100
 ALTO_FILA = 15
 ERRORES_EXCEL = {"#REF!", "#VALUE!", "#DIV/0!", "#N/A", "#NAME?", "#NULL!", "#NUM!"}
+# Tablas cuyo CSV no se versiona (> 50 MB): si falta (clon recién hecho), su hoja lleva una nota con el comando
+# que lo genera en lugar de hacer fallar el libro. Cualquier otro CSV ausente sigue siendo un error.
+CSV_NO_VERSIONADOS = {"mivau_serpavi_alquiler": "python -m etl.ejecutar_todo MIVAU-SERPAVI"}
 NOTA_KPIS = "Columna vaciada: contenía #VALUE! (fórmulas rotas por vínculo externo perdido)"
 
 FUENTE = Font(name="Arial", size=10)
@@ -170,10 +173,17 @@ def _es_error(v) -> bool:
     return isinstance(v, str) and v.strip() in ERRORES_EXCEL
 
 
-def _hoja_datos(wb, tabla: str, hoja: str, campos: pd.DataFrame, dir_salida: Path) -> int:
-    """Escribe la hoja de una tabla (completa o muestra) y devuelve el total de filas del CSV."""
+def _hoja_datos(wb, tabla: str, hoja: str, campos: pd.DataFrame, dir_salida: Path) -> int | None:
+    """Escribe la hoja de una tabla (completa o muestra) y devuelve el total de filas del CSV (None si es un CSV
+    no versionado que aún no se ha generado)."""
     csv = dir_salida / f"{tabla}.csv"
     if not csv.exists():
+        if tabla in CSV_NO_VERSIONADOS:
+            nota = (f"Falta etl/salida/{tabla}.csv (no se versiona por tamaño): generarlo con "
+                    f"{CSV_NO_VERSIONADOS[tabla]} y reconstruir el libro")
+            print(f"AVISO: {nota}")
+            _escribir(wb, hoja, pd.DataFrame(columns=list(campos["campo"])), nota=nota).sheet_state = "hidden"
+            return None
         raise FileNotFoundError(f"Falta el CSV de salida de {tabla}: {csv}")
     df = pd.read_csv(csv, sep=";", dtype=str, encoding="utf-8")
     total = len(df)

@@ -89,7 +89,7 @@ CREATE TABLE IF NOT EXISTS `MIVAU`.`mivau_vivienda_libre_terminadas` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci COMMENT='Vivienda libre: viviendas libres terminadas';
 
 CREATE TABLE IF NOT EXISTS `MIVAU`.`mivau_eti_transacciones` (
-  `id_registro` VARCHAR(64) NOT NULL COMMENT 'Clave natural: cod_territorio + ''_'' + periodo. Igual en cada descarga: sirve para el UPSERT (longitud máx. actual: 11)',
+  `id_registro` VARCHAR(64) NOT NULL COMMENT 'Clave natural: cod_territorio + ''_'' + regimen + ''_'' + antiguedad + ''_'' + periodo. Igual en cada descarga: sirve para el UPSERT (longitud máx. actual: 34)',
   `nivel` ENUM('Nacional','CCAA','Provincia','Municipio') NOT NULL COMMENT 'Nivel territorial del dato',
   `cod_territorio` VARCHAR(8) NOT NULL COMMENT 'Código territorial único (ES / CAxx / PRxx / MUxxxxx)',
   `cod_ccaa` CHAR(2) NOT NULL COMMENT 'Código INE de comunidad autónoma (00 = Nacional)',
@@ -98,13 +98,15 @@ CREATE TABLE IF NOT EXISTS `MIVAU`.`mivau_eti_transacciones` (
   `nombre_provincia` VARCHAR(100) NULL COMMENT 'Nombre oficial INE de la provincia (NULL en filas Nacional/CCAA)',
   `cod_municipio` CHAR(5) NULL COMMENT 'Código INE de municipio (NULL: la fuente no trae nivel municipal)',
   `nombre_municipio` VARCHAR(100) NULL COMMENT 'Nombre oficial INE del municipio (NULL: la fuente no trae nivel municipal)',
+  `regimen` VARCHAR(10) NOT NULL COMMENT 'Régimen de la vivienda: TOTAL (libre + protegida), LIBRE o PROTEGIDA (boletines 34010110-34010190, ver antiguedad)',
+  `antiguedad` VARCHAR(12) NOT NULL COMMENT 'Antigüedad de la vivienda: TOTAL (nueva + segunda mano), NUEVA o SEGUNDA_MANO. Cada combinación regimen x antiguedad es un boletín: TOTAL_TOTAL 34010110, LIBRE_TOTAL 34010120, LIBRE_NUEVA 34010130, LIBRE_SEGUNDA_MANO 34010140, PROTEGIDA_TOTAL 34010150, PROTEGIDA_NUEVA 34010160, PROTEGIDA_SEGUNDA_MANO 34010170, TOTAL_NUEVA 34010180, TOTAL_SEGUNDA_MANO 34010190',
   `periodo` VARCHAR(7) NOT NULL COMMENT 'Periodo normalizado: AAAAMmm / AAAATn / AAAA',
   `frecuencia` CHAR(1) NOT NULL COMMENT 'M = mensual, T = trimestral, A = anual',
   `anio` SMALLINT UNSIGNED NOT NULL COMMENT 'Año del periodo',
   `trimestre` TINYINT UNSIGNED NULL COMMENT 'Trimestre (1-4); NULL en mensual y anual',
   `mes` TINYINT UNSIGNED NULL COMMENT 'Mes (1-12); NULL en trimestral y anual',
   `fecha` DATE NOT NULL COMMENT 'Primer día del periodo',
-  `num_transacciones` INT UNSIGNED NULL COMMENT 'Número total de transacciones inmobiliarias de vivienda (compraventas, libres y protegidas, nuevas y de segunda mano; unidad: transacción) en el trimestre. NULL si la fuente no publica el dato',
+  `num_transacciones` INT UNSIGNED NULL COMMENT 'Número de transacciones inmobiliarias de vivienda (compraventas; unidad: transacción) del régimen y la antigüedad de la fila en el trimestre (TOTAL_TOTAL = todas). NULL si la fuente no publica el dato (celda en blanco)',
   `provisional` TINYINT(1) NOT NULL COMMENT '1 = dato provisional, 0 = definitivo. La fuente marca como provisional el último trimestre publicado (cabecera con ''(**)'')',
   `fecha_descarga` DATE NOT NULL COMMENT 'Día en que se descargó el dato de la fuente',
   PRIMARY KEY (`id_registro`),
@@ -113,8 +115,10 @@ CREATE TABLE IF NOT EXISTS `MIVAU`.`mivau_eti_transacciones` (
   INDEX `idx_cod_ccaa` (`cod_ccaa`),
   INDEX `idx_cod_provincia` (`cod_provincia`),
   INDEX `idx_cod_municipio` (`cod_municipio`),
+  INDEX `idx_regimen` (`regimen`),
+  INDEX `idx_antiguedad` (`antiguedad`),
   INDEX `idx_fecha` (`fecha`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci COMMENT='Estadística de Transacciones Inmobiliarias (compraventas): nº total de transacciones de vivienda por CCAA y provincia';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci COMMENT='Estadística de Transacciones Inmobiliarias';
 
 CREATE TABLE IF NOT EXISTS `MIVAU`.`mivau_eti_compradores_extranjeros` (
   `id_registro` VARCHAR(64) NOT NULL COMMENT 'Clave natural: cod_territorio + ''_'' + cod_ccaa_comprador + ''_'' + periodo. Igual en cada descarga: sirve para el UPSERT (longitud máx. actual: 14)',
@@ -361,3 +365,46 @@ CREATE TABLE IF NOT EXISTS `MIVAU`.`mivau_visados_direccion_obra` (
   INDEX `idx_tipo_obra` (`tipo_obra`),
   INDEX `idx_fecha` (`fecha`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci COMMENT='Obras en edificación: visados de dirección de obra (nº de viviendas y superficie media por tipo de obra)';
+
+CREATE TABLE IF NOT EXISTS `MIVAU`.`mivau_serpavi_alquiler` (
+  `id_registro` VARCHAR(64) NOT NULL COMMENT 'Clave natural: cod_territorio + ''_'' + tipologia + ''_'' + periodo. Igual en cada descarga: sirve para el UPSERT (longitud máx. actual: 29)',
+  `nivel` ENUM('Nacional','CCAA','Provincia','Municipio','Distrito','Seccion') NOT NULL COMMENT 'Nivel territorial del dato. Esta tabla añade Distrito (distrito censal) y Seccion (sección censal); SERPAVI no trae fila Nacional con etiqueta',
+  `cod_territorio` VARCHAR(12) NOT NULL COMMENT 'Código territorial único (CAxx / PRxx / MUxxxxx / DI + 7 dígitos del distrito censal / SC + 10 dígitos de la sección censal); códigos INE del seccionado del Censo 2021',
+  `cod_ccaa` CHAR(2) NOT NULL COMMENT 'Código INE de comunidad autónoma (00 = Nacional)',
+  `nombre_ccaa` VARCHAR(100) NOT NULL COMMENT 'Nombre oficial INE de la comunidad autónoma (según maestro BD_Territorios)',
+  `cod_provincia` CHAR(2) NULL COMMENT 'Código INE de provincia (NULL en filas CCAA)',
+  `nombre_provincia` VARCHAR(100) NULL COMMENT 'Nombre oficial INE de la provincia (NULL en filas CCAA)',
+  `cod_municipio` CHAR(5) NULL COMMENT 'Código INE de municipio de 5 dígitos (provincia + municipio); en filas Distrito y Seccion, el municipio al que pertenecen (primeros 5 dígitos del código). NULL en filas CCAA y Provincia',
+  `nombre_municipio` VARCHAR(100) NULL COMMENT 'Nombre oficial INE del municipio (relación de municipios a 1-1-2026, no el texto del archivo). NULL en filas CCAA y Provincia',
+  `cod_distrito` CHAR(7) NULL COMMENT 'Código INE del distrito censal (CPRO + CMUN + DIST, 7 dígitos; seccionado del Censo 2021) en filas Distrito y Seccion; NULL en el resto. Columna propia de esta tabla',
+  `cod_seccion` CHAR(10) NULL COMMENT 'Código INE de la sección censal (CPRO + CMUN + DIST + SECC, 10 dígitos; CUSEC del Censo 2021) en filas Seccion; NULL en el resto. Columna propia de esta tabla',
+  `tipologia` VARCHAR(12) NOT NULL COMMENT 'Tipología de la vivienda (la de más superficie del inmueble, grupo GGT01 del Catastro): COLECTIVA (VC, vivienda colectiva) o UNIFAMILIAR (VU, vivienda unifamiliar o rural). El archivo no trae total de ambas',
+  `periodo` VARCHAR(7) NOT NULL COMMENT 'Periodo normalizado: AAAAMmm / AAAATn / AAAA',
+  `frecuencia` CHAR(1) NOT NULL COMMENT 'M = mensual, T = trimestral, A = anual',
+  `anio` SMALLINT UNSIGNED NOT NULL COMMENT 'Año del periodo (año de las rentas declaradas en el IRPF, modelo 100)',
+  `trimestre` TINYINT UNSIGNED NULL COMMENT 'Trimestre (1-4); NULL en mensual y anual',
+  `mes` TINYINT UNSIGNED NULL COMMENT 'Mes (1-12); NULL en trimestral y anual',
+  `fecha` DATE NOT NULL COMMENT 'Primer día del periodo',
+  `renta_mediana_eur_m2_mes` DECIMAL(10,2) NULL COMMENT 'Alquiler mensual por metro cuadrado, mediana (unidad: euros por m2 y mes; columna ALQM2_LV_M_V*_AA, metadatos ''ALQM2mes_LV_M''), redondeado a 2 decimales. Mediana: no se suma ni se promedia entre territorios. NULL si la celda está vacía (secreto estadístico o sin datos)',
+  `renta_p25_eur_m2_mes` DECIMAL(10,2) NULL COMMENT 'Alquiler mensual por metro cuadrado, percentil 25 (euros por m2 y mes; ALQM2_LV_25_V*_AA), 2 decimales. NULL si la celda está vacía',
+  `renta_p75_eur_m2_mes` DECIMAL(10,2) NULL COMMENT 'Alquiler mensual por metro cuadrado, percentil 75 (euros por m2 y mes; ALQM2_LV_75_V*_AA), 2 decimales. NULL si la celda está vacía',
+  `renta_mediana_eur_mes` DECIMAL(12,2) NULL COMMENT 'Alquiler mensual de todo el inmueble, mediana (unidad: euros al mes; ALQTBID12_M_V*_AA), 2 decimales. NULL si la celda está vacía',
+  `renta_p25_eur_mes` DECIMAL(12,2) NULL COMMENT 'Alquiler mensual de todo el inmueble, percentil 25 (euros al mes; ALQTBID12_25_V*_AA), 2 decimales. NULL si la celda está vacía',
+  `renta_p75_eur_mes` DECIMAL(12,2) NULL COMMENT 'Alquiler mensual de todo el inmueble, percentil 75 (euros al mes; ALQTBID12_75_V*_AA), 2 decimales. NULL si la celda está vacía',
+  `superficie_mediana_m2` DECIMAL(10,2) NULL COMMENT 'Superficie del inmueble alquilado, mediana (unidad: metros cuadrados; SLVM2_M_V*_AA), 2 decimales. NULL si la celda está vacía',
+  `superficie_p25_m2` DECIMAL(10,2) NULL COMMENT 'Superficie del inmueble alquilado, percentil 25 (m2; SLVM2_25_V*_AA), 2 decimales. NULL si la celda está vacía',
+  `superficie_p75_m2` DECIMAL(10,2) NULL COMMENT 'Superficie del inmueble alquilado, percentil 75 (m2; SLVM2_75_V*_AA), 2 decimales. NULL si la celda está vacía',
+  `num_inmuebles_alquiler` INT UNSIGNED NULL COMMENT 'Número de bienes inmuebles del subconjunto de alquiler (con ingresos por arrendamiento de vivienda habitual, excluido el alquiler a parientes, y con dato tributario y catastral) de la tipología de la fila (columna BI_ALVHEPCO_TV*_AA). Es un recuento: sección -> distrito -> municipio -> provincia -> CCAA suman (salvo 35 diferencias de la fuente en Navarra). NULL si la celda está vacía',
+  `provisional` TINYINT(1) NOT NULL COMMENT '1 = dato provisional, 0 = definitivo. SERPAVI no marca datos provisionales: siempre 0',
+  `fecha_descarga` DATE NOT NULL COMMENT 'Día en que se descargó el dato de la fuente',
+  PRIMARY KEY (`id_registro`),
+  INDEX `idx_nivel` (`nivel`),
+  INDEX `idx_cod_territorio` (`cod_territorio`),
+  INDEX `idx_cod_ccaa` (`cod_ccaa`),
+  INDEX `idx_cod_provincia` (`cod_provincia`),
+  INDEX `idx_cod_municipio` (`cod_municipio`),
+  INDEX `idx_cod_distrito` (`cod_distrito`),
+  INDEX `idx_cod_seccion` (`cod_seccion`),
+  INDEX `idx_tipologia` (`tipologia`),
+  INDEX `idx_fecha` (`fecha`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci COMMENT='SERPAVI: Sistema Estatal de Referencia del Precio del Alquiler de Vivienda (base de datos 2011-2024)';

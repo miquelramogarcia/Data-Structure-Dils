@@ -153,3 +153,16 @@ def test_datasets_con_la_misma_tabla_comparten_hoja(tmp_path):
     assert filas == {"compartida": 4, "otra": 2}
     enlaces = [r[1].hyperlink.location for r in wb["Tablas"].iter_rows(min_row=2) if r[1].value == "compartida"]
     assert enlaces == ["'compartida'!A1"] * 2
+
+
+def test_csv_no_versionado_ausente_deja_nota(tmp_path, capsys):
+    # mivau_serpavi_alquiler.csv (246 MB) no se versiona: en un clon recién hecho falta y el libro se construye
+    # igual, con una nota que dice cómo generarlo; cualquier otro CSV ausente sigue haciendo fallar el proceso.
+    salida = tmp_path / "v2.xlsx"
+    construir_libro(ORIGEN, salida, dir_salida=tmp_path, catalogo=_catalogo_sintetico(["mivau_serpavi_alquiler"]))
+    ws = load_workbook(salida)["mivau_serpavi_alquiler"]
+    assert "python -m etl.ejecutar_todo MIVAU-SERPAVI" in ws["A1"].value
+    assert [c.value for c in ws[2]] == ["cod_territorio", "valor"] and ws.max_row == 2
+    assert "AVISO" in capsys.readouterr().out
+    with pytest.raises(FileNotFoundError, match="otra_tabla"):
+        construir_libro(ORIGEN, salida, dir_salida=tmp_path, catalogo=_catalogo_sintetico(["otra_tabla"]))

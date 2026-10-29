@@ -3,7 +3,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from etl.lib.territorios import (TerritorioDesconocido, cargar_maestro,
+from etl.lib.territorios import (TerritorioDesconocido, cargar_maestro, territorio_por_codigo,
                                  expandir_uniprovinciales, normalizar, resolver)
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -157,3 +157,42 @@ def test_municipio_nombre_bilingue_por_cualquiera_de_sus_partes(M):
     # sin nivel Municipio la parte suelta no resuelve (no se toca a CCAA ni provincias)
     with pytest.raises(TerritorioDesconocido):
         resolver(M, "Alcoy")
+
+
+def test_maestro_incluye_secciones_y_distritos_serpavi(M):
+    # etl/lib/secciones_serpavi.csv: seccionado censal INE 2021 tal como lo trae SERPAVI (códigos = INE)
+    sc = M[M["nivel"] == "Seccion"]
+    di = M[M["nivel"] == "Distrito"]
+    assert len(sc) == 36293 and sc["cod_territorio"].is_unique
+    assert len(di) == 10503 and di["cod_territorio"].is_unique
+    assert sc["cod_territorio"].str.fullmatch(r"SC\d{10}").all()
+    assert di["cod_territorio"].str.fullmatch(r"DI\d{7}").all()
+    # cada sección y distrito cuelga de un municipio del INE (mismas columnas de CCAA/provincia/municipio)
+    mu = M[(M["nivel"] == "Municipio") & (M["fuente_alias"] == "INE")].set_index("cod_municipio")
+    for df in (sc, di):
+        assert (df["cod_municipio"] == df["cod_territorio"].str[2:7]).all()
+        assert df["cod_municipio"].isin(mu.index).all()
+        assert (df["nombre_municipio"].values == mu.loc[df["cod_municipio"], "nombre_municipio"].values).all()
+        assert (df["cod_ccaa"].values == mu.loc[df["cod_municipio"], "cod_ccaa"].values).all()
+
+
+def test_territorio_por_codigo(M):
+    f = territorio_por_codigo(M, "SC5100101001")
+    assert f == {"nivel": "Seccion", "cod_territorio": "SC5100101001", "cod_ccaa": "18", "nombre_ccaa": "Ceuta",
+                 "cod_provincia": "51", "nombre_provincia": "Ceuta", "cod_municipio": "51001",
+                 "nombre_municipio": "Ceuta"}
+    assert territorio_por_codigo(M, "DI5100101")["nivel"] == "Distrito"
+    assert territorio_por_codigo(M, "MU04079")["nombre_municipio"] == "Roquetas de Mar"
+    assert territorio_por_codigo(M, "PR04")["nombre_provincia"] == "Almería"
+    assert territorio_por_codigo(M, "CA13")["cod_provincia"] is None
+
+
+def test_territorio_por_codigo_desconocido_falla(M):
+    with pytest.raises(TerritorioDesconocido, match="SC9999999999"):
+        territorio_por_codigo(M, "SC9999999999")
+
+
+def test_resolver_por_nombre_no_cambia_con_secciones(M):
+    # las secciones no tienen nombres de lugar: "Ceuta" sigue siendo la CCAA
+    assert resolver(M, "Ceuta")["cod_territorio"] == "CA18"
+    assert resolver(M, "Ceuta", nivel="Municipio")["cod_territorio"] == "MU51001"

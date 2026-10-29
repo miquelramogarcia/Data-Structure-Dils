@@ -44,7 +44,9 @@ No se edita el SQL a mano. Las tablas sin campos diseñados aún se omiten. Cuan
 
 ## Maestro de territorios y municipios
 
-`cargar_maestro` lee la hoja "Maestro Territorios" del usuario (Nacional, CCAA y provincias), añade `etl/lib/territorios_extra.csv` (alias de etiquetas de las fuentes) y añade `etl/lib/municipios_ine.csv`: los 8.132 municipios de la relación oficial del INE "Relación de municipios y sus códigos por comunidades autónomas y provincias", situación a 1 de enero de 2026 (`diccionario26.xlsx`, https://www.ine.es/daco/daco42/codmun/codmun.htm). El original se guarda en `etl/descargas/` (no versionado) y el CSV se regenera con `python -m etl.lib.municipios_ine_generar`. Códigos: `cod_territorio` = `MU` + CPRO + CMUN (5 dígitos); los nombres de CCAA y provincia salen del maestro del usuario. Sin `nivel`, `resolver` prefiere CCAA > Provincia > Municipio (los nombres como "Madrid" o "Soria" siguen siendo la provincia); con `nivel="Municipio"` acepta el artículo al principio o al final y cada parte de un nombre bilingüe; un nombre repetido en varias provincias da `TerritorioAmbiguo` y se resuelve con `resolver_municipio(maestro, municipio, provincia)`. La hoja "Maestro Territorios" del libro de salida no incluye los municipios (son 8.132 filas); viven en el CSV.
+`cargar_maestro` lee la hoja "Maestro Territorios" del usuario (Nacional, CCAA y provincias), añade `etl/lib/territorios_extra.csv` (alias de etiquetas de las fuentes) y añade `etl/lib/municipios_ine.csv`: los 8.132 municipios de la relación oficial del INE "Relación de municipios y sus códigos por comunidades autónomas y provincias", situación a 1 de enero de 2026 (`diccionario26.xlsx`, https://www.ine.es/daco/daco42/codmun/codmun.htm). El original se guarda en `etl/descargas/` (no versionado) y el CSV se regenera con `python -m etl.lib.municipios_ine_generar`. Códigos: `cod_territorio` = `MU` + CPRO + CMUN (5 dígitos); los nombres de CCAA y provincia salen del maestro del usuario. Sin `nivel`, `resolver` prefiere CCAA > Provincia > Municipio (los nombres como "Madrid" o "Soria" siguen siendo la provincia); con `nivel="Municipio"` acepta el artículo al principio o al final y cada parte de un nombre bilingüe; un nombre repetido en varias provincias da `TerritorioAmbiguo` y se resuelve con `resolver_municipio(maestro, municipio, provincia)`. La hoja "Maestro Territorios" del libro de salida es el maestro completo que devuelve `cargar_maestro` (desde la Tarea 14, 55.043 filas con municipios, distritos y secciones).
+
+Distritos y secciones censales: `cargar_maestro` añade también `etl/lib/secciones_serpavi.csv` (10.503 distritos, `DI` + 7 dígitos, y 36.293 secciones, `SC` + 10 dígitos, del seccionado del Censo 2021 tal como lo trae SERPAVI; mismas 12 columnas, `nivel` Distrito / Seccion). Cada código cuelga de un municipio del INE. Se regenera con `python -m etl.lib.secciones_serpavi_generar etl/descargas/MIVAU-SERPAVI_AAAAMMDD.xlsx`. Estos niveles se buscan por código con `territorio_por_codigo(maestro, cod_territorio)`, nunca por nombre.
 
 ## Requisitos e instalación
 
@@ -66,6 +68,8 @@ Al terminar las fuentes se reconstruye `Data Dils_v2.xlsx` (hojas: Tablas, Campo
 ```
 python -c "from etl.construir_libro import construir_libro; construir_libro()"
 ```
+
+Tablas grandes: `mivau_serpavi_alquiler` (1,3 millones de filas, CSV de ~246 MB) no se versiona (está en `.gitignore`); tras clonar el repositorio hay que generarla con `python -m etl.ejecutar_todo MIVAU-SERPAVI` (descarga ~68 MB y tarda unos 2 minutos, más la construcción del libro) antes de construir el libro (si falta, el libro se construye igual y esa hoja solo lleva una nota con el comando). En el libro su hoja muestra las 100.000 primeras filas con una nota.
 
 El libro se crea siempre desde cero (nunca se escribe `Data Dils.xlsx`); `Data Dils.xlsx` solo se lee, desde una copia temporal, para el Maestro Territorios y la hoja General.
 

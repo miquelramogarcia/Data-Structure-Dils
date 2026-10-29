@@ -119,3 +119,12 @@ def test_cuadre_detecta_descuadre():
 def test_cuadre_ok_vacio():
     df = _tabla([_fila("ES", 10.0), _fila("CA01", 10.0), _fila("PR04", 4.0), _fila("PR11", 6.0)])
     assert cuadre_jerarquico(df, "valor", ["regimen"]).empty
+
+
+def test_columnas_territorio_extra_van_tras_el_municipio():
+    # SERPAVI: cod_distrito y cod_seccion tras nombre_municipio y antes de las dimensiones; no entran en la clave
+    df = pd.DataFrame([_fila("PR04", 1, cod_distrito="0401301", cod_seccion=None)])
+    t = construir_tabla(df, ["regimen"], ["valor"], date(2026, 7, 1), territorio_extra=["cod_distrito", "cod_seccion"])
+    assert list(t.columns) == (["id_registro"] + COLUMNAS_TERRITORIO + ["cod_distrito", "cod_seccion", "regimen"]
+                               + COLUMNAS_TIEMPO + ["valor"] + COLUMNAS_CONTROL)
+    assert t["id_registro"].iloc[0] == "PR04_TOTAL_2026M06"

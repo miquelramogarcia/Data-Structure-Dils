@@ -17,6 +17,9 @@ CCAA_UNIPROVINCIALES = {"03", "04", "06", "13", "14", "15", "17", "18", "19"}
 EXTRA_CSV = Path(__file__).with_name("territorios_extra.csv")
 # Municipios del INE (relación oficial a 1-1-2026), generado por etl/lib/municipios_ine_generar.py
 MUNICIPIOS_CSV = Path(__file__).with_name("municipios_ine.csv")
+# Distritos y secciones censales (seccionado INE 2021) tomados de SERPAVI; generado por
+# etl/lib/secciones_serpavi_generar.py. Se resuelven por código (`territorio_por_codigo`), nunca por nombre.
+SECCIONES_CSV = Path(__file__).with_name("secciones_serpavi.csv")
 
 
 class TerritorioDesconocido(ValueError):
@@ -68,7 +71,8 @@ def leer_hoja_con_errores(xlsx: Path, hoja: str) -> pd.DataFrame:
 
 
 def cargar_maestro(xlsx: Path) -> pd.DataFrame:
-    """Lee la hoja 'Maestro Territorios' desde una copia temporal y añade territorios_extra.csv y los municipios del INE."""
+    """Lee la hoja 'Maestro Territorios' desde una copia temporal y añade territorios_extra.csv, los municipios del
+    INE y los distritos y secciones censales de SERPAVI (secciones_serpavi.csv)."""
     df = leer_hoja_usuario(xlsx, "Maestro Territorios", header=None, dtype=str)
     if len(df) and str(df.iloc[0, 0]).strip().lower() == "alias":
         df = df.iloc[1:]
@@ -79,7 +83,38 @@ def cargar_maestro(xlsx: Path) -> pd.DataFrame:
         df = pd.concat([df, extra[COLUMNAS_MAESTRO]], ignore_index=True)
     municipios = pd.read_csv(MUNICIPIOS_CSV, dtype=str)
     df = pd.concat([df, municipios[COLUMNAS_MAESTRO]], ignore_index=True)
+    if SECCIONES_CSV.exists():
+        secciones = pd.read_csv(SECCIONES_CSV, dtype=str)
+        df = pd.concat([df, secciones[COLUMNAS_MAESTRO]], ignore_index=True)
     return df.reset_index(drop=True)
+
+
+_POR_CODIGO: dict[int, tuple] = {}
+
+
+def territorio_por_codigo(maestro: pd.DataFrame, cod_territorio: str) -> dict:
+    """Fila del maestro (columnas de territorio) por `cod_territorio` exacto: ES, CAxx, PRxx, MUxxxxx, DIxxxxxxx o
+    SCxxxxxxxxxx. Camino rápido para fuentes que traen el código INE (SERPAVI); TerritorioDesconocido si no existe.
+
+    El índice código -> fila se calcula una vez por DataFrame; si un código tiene varias filas (alias), todas
+    comparten las columnas de territorio y vale la primera.
+    """
+    en_cache = _POR_CODIGO.get(id(maestro))
+    if en_cache is None or en_cache[0] is not maestro or en_cache[1] != len(maestro):
+        codigos = maestro["cod_territorio"].to_numpy()
+        indice: dict[str, int] = {}
+        for pos, cod in enumerate(codigos):
+            if isinstance(cod, str):
+                indice.setdefault(cod, pos)
+        en_cache = (maestro, len(maestro), indice, {})
+        _POR_CODIGO[id(maestro)] = en_cache
+    indice, filas = en_cache[2], en_cache[3]
+    if cod_territorio not in filas:
+        pos = indice.get(cod_territorio)
+        if pos is None:
+            raise TerritorioDesconocido(f"Código de territorio no encontrado en el maestro: {cod_territorio!r}")
+        filas[cod_territorio] = _fila(maestro, pos)
+    return dict(filas[cod_territorio])
 
 
 _ARTICULOS = r"(?:el|la|los|las|lo|l'|els|les|a|o|as|os)"
