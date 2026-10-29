@@ -2,6 +2,7 @@
 import shutil
 import tempfile
 import unicodedata
+from contextlib import contextmanager
 from pathlib import Path
 
 import pandas as pd
@@ -24,12 +25,39 @@ def normalizar(txt: str) -> str:
     return " ".join(t.lower().split())
 
 
-def leer_hoja_usuario(xlsx: Path, hoja: str, **kw) -> pd.DataFrame:
-    """Lee una hoja del libro del usuario desde una copia temporal (el original no se toca)."""
+@contextmanager
+def copia_temporal(xlsx: Path):
+    """Entrega la ruta de una copia temporal del libro (el original no se toca ni se bloquea)."""
     with tempfile.TemporaryDirectory() as tmp:
         copia = Path(tmp) / "copia.xlsx"
         shutil.copy(xlsx, copia)
+        yield copia
+
+
+def leer_hoja_usuario(xlsx: Path, hoja: str, **kw) -> pd.DataFrame:
+    """Lee una hoja del libro del usuario desde una copia temporal (el original no se toca)."""
+    with copia_temporal(xlsx) as copia:
         return pd.read_excel(copia, sheet_name=hoja, **kw)
+
+
+def leer_hoja_con_errores(xlsx: Path, hoja: str) -> pd.DataFrame:
+    """Como leer_hoja_usuario, pero las celdas de error llegan como texto ('#VALUE!', '#REF!'…).
+
+    pandas convierte esas celdas en NaN y no se pueden contar; openpyxl las entrega tal cual.
+    Primera fila = cabecera; se descartan columnas sin cabecera y filas totalmente vacías.
+    """
+    from openpyxl import load_workbook
+    with copia_temporal(xlsx) as copia:
+        wb = load_workbook(copia, read_only=True, data_only=True)
+        try:
+            filas = [list(f) for f in wb[hoja].iter_rows(values_only=True)]
+        finally:
+            wb.close()
+    cab = filas[0] if filas else []
+    validas = [j for j, c in enumerate(cab) if c is not None]
+    datos = [[f[j] if j < len(f) else None for j in validas] for f in filas[1:]]
+    datos = [f for f in datos if any(v is not None for v in f)]
+    return pd.DataFrame(datos, columns=[cab[j] for j in validas], dtype=object)
 
 
 def cargar_maestro(xlsx: Path) -> pd.DataFrame:

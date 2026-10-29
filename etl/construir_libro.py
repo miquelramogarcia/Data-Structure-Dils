@@ -13,7 +13,7 @@ from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.hyperlink import Hyperlink
 
 from etl.catalogo.sql import DIR as DIR_CATALOGO, cargar_catalogo, create_table_sql
-from etl.lib.territorios import cargar_maestro, leer_hoja_usuario
+from etl.lib.territorios import cargar_maestro, leer_hoja_con_errores
 
 DIR_SALIDA = Path(__file__).parent / "salida"
 GLOSARIO = DIR_CATALOGO / "glosario.csv"
@@ -140,21 +140,30 @@ def _hoja_tablas(wb, tablas, campos, hojas, filas) -> None:
             cel.font = FUENTE_ENLACE
 
 
-def _hoja_general(wb, origen: Path) -> int:
-    """Copia la hoja General del usuario sin la columna KPIs ni celdas de error. Devuelve nº de errores."""
-    df = leer_hoja_usuario(origen, "General").astype(object)
+def _hoja_general(wb, origen: Path) -> tuple[int, int]:
+    """Copia la hoja General del usuario sin la columna KPIs ni celdas de error.
+
+    Devuelve (errores en KPIs, errores en el resto de columnas); ambos se vacían.
+    """
+    df = leer_hoja_con_errores(origen, "General")
+    err_kpis = 0
     if "KPIs" in df.columns:
+        err_kpis = int(df["KPIs"].map(_es_error).sum())
         df["KPIs"] = None
     errores = 0
     for c in df.columns:
         for i, v in df[c].items():
-            if isinstance(v, str) and v.strip() in ERRORES_EXCEL:
+            if _es_error(v):
                 df.at[i, c] = None
                 errores += 1
     ws = _escribir(wb, "General", df, superior=True, ajustar=set(df.columns))
     if "KPIs" in df.columns:
         ws.cell(1, list(df.columns).index("KPIs") + 1).comment = Comment(NOTA_KPIS, "Claude", width=320, height=60)
-    return errores
+    return err_kpis, errores
+
+
+def _es_error(v) -> bool:
+    return isinstance(v, str) and v.strip() in ERRORES_EXCEL
 
 
 def _hoja_datos(wb, tabla: str, hoja: str, campos: pd.DataFrame, dir_salida: Path) -> int:
@@ -209,7 +218,7 @@ def construir_libro(origen: Path = Path("Data Dils.xlsx"), salida: Path = Path("
         glo = pd.DataFrame(columns=["termino", "definicion", "fuente"])
     _escribir(wb, "Glosario", glo.rename(columns={"termino": "Término", "definicion": "Definición",
                                                   "fuente": "Fuente"}), superior=True, ajustar={"Definición"})
-    errores = _hoja_general(wb, origen)
+    err_kpis, errores = _hoja_general(wb, origen)
 
     orden = ["Tablas", "Campos", "Maestro Territorios", "Glosario", "General"] + list(hojas.values())
     wb._sheets = [wb[n] for n in orden]
@@ -218,4 +227,5 @@ def construir_libro(origen: Path = Path("Data Dils.xlsx"), salida: Path = Path("
         ws.sheet_view.tabSelected = ws.title == "Tablas"
     wb.save(salida)
     print(f"Libro escrito en {salida}: {len(orden)} hojas; "
-          f"{errores} celdas con error de Excel vaciadas en General (además de la columna KPIs)")
+          f"General: {err_kpis} celdas con error en la columna KPIs (vaciada) y "
+          f"{errores} celdas con error de Excel vaciadas en el resto de columnas")

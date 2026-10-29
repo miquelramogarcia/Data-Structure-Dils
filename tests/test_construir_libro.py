@@ -107,3 +107,26 @@ def test_tabla_grande_hoja_muestra(tmp_path, monkeypatch):
     t = wb["Tablas"]
     cab = [c.value for c in t[1]]
     assert t.cell(2, cab.index("Filas") + 1).value == 60
+
+
+def test_general_cuenta_errores_fuera_de_kpis(tmp_path, capsys):
+    from openpyxl import Workbook
+    src = Workbook()
+    src.active.title = "General"
+    src["General"].append(["Dataset ID", "Nota", "KPIs"])
+    src["General"].append(["A", "#REF!", "#VALUE!"])
+    src["General"].append(["B", "ok", "#VALUE!"])
+    src.create_sheet("Maestro Territorios").append(["alias", "nivel", "cod_territorio", "cod_ccaa", "nombre_ccaa",
+                                                    "cod_provincia", "nombre_provincia", "cod_municipio",
+                                                    "nombre_municipio", "nombre_territorio", "fuente_alias",
+                                                    "cod_fuente_alias"])
+    _csv(tmp_path, "t", 2)
+    ruta = tmp_path / "origen.xlsx"
+    src.save(ruta)
+    salida = tmp_path / "v2.xlsx"
+    construir_libro(ruta, salida, dir_salida=tmp_path, catalogo=_catalogo_sintetico(["t"]))
+    ws = load_workbook(salida)["General"]
+    assert ws["B2"].value is None and ws["B3"].value == "ok"
+    assert ws["C2"].value is None and ws["C3"].value is None
+    out = capsys.readouterr().out
+    assert "2 celdas con error en la columna KPIs" in out and "1 celdas con error de Excel vaciadas" in out
