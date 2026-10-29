@@ -34,13 +34,18 @@ def main(ids: list[str]) -> None:
         avisos = f"{len(cuadre)} avisos de cuadre" if cuadre is not None else "cuadre no aplica"
         print(f"{i}: {fuente.TABLA}: {len(tabla)} filas, {avisos}")
     raiz = Path(__file__).resolve().parent.parent
-    construir_libro(raiz / "Data Dils.xlsx", raiz / "Data Dils_v2.xlsx")
+    libro_ok = True
+    try:
+        construir_libro(raiz / "Data Dils.xlsx", raiz / "Data Dils_v2.xlsx")
+    except Exception as e:  # un fallo del libro no debe ocultar el resumen por fuente
+        print(f"ERROR libro: {e}", file=sys.stderr)
+        libro_ok = False
     print(f"Resumen: {len(correctas)} correctas, {len(fallidas)} fallidas")
     for i, (tabla, n) in correctas.items():
         print(f"  OK {i}: {tabla} ({n} filas)")
     for i in fallidas:
         print(f"  FALLO {i}")
-    if fallidas:
+    if fallidas or not libro_ok:
         raise SystemExit(1)
 
 

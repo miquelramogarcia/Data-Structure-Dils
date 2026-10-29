@@ -35,7 +35,14 @@ def descargar(url: str, dataset_id: str, destino: Path = Path("etl/descargas")) 
     r = requests.get(url, headers={"User-Agent": _UA}, timeout=60)
     if r.status_code != 200:
         raise RuntimeError(f"Descarga fallida ({r.status_code}): {url}")
-    ruta.write_bytes(r.content)
+    if r.content.lstrip()[:1] == b"<":  # página de error HTML servida con 200 (el .xls/.xlsx nunca empieza por "<")
+        raise RuntimeError(f"La descarga devolvió una página HTML, no un archivo de datos: {url}")
+    parcial = ruta.with_name(ruta.name + ".part")
+    try:
+        parcial.write_bytes(r.content)
+        parcial.replace(ruta)  # atómico: nunca queda un archivo a medias con el nombre definitivo
+    finally:
+        parcial.unlink(missing_ok=True)
     return ruta
 
 

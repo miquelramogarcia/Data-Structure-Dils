@@ -52,3 +52,16 @@ def test_fuente_sin_cuadre_no_lo_ejecuta(monkeypatch, capsys):
     monkeypatch.setattr(ejecutar_todo, "cuadre_jerarquico", _no)
     ejecutar_todo.main(["FAKE-MEDIA"])
     assert "cuadre no aplica" in capsys.readouterr().out
+
+
+def test_fallo_del_libro_no_oculta_el_resumen(monkeypatch, capsys):
+    def _rompe(*a):
+        raise RuntimeError("libro bloqueado")
+    monkeypatch.setattr(ejecutar_todo, "REGISTRO", {"FAKE-OK": _Buena})
+    monkeypatch.setattr(ejecutar_todo, "construir_libro", _rompe)
+    with pytest.raises(SystemExit) as e:
+        ejecutar_todo.main(["FAKE-OK"])
+    assert e.value.code == 1
+    out = capsys.readouterr()
+    assert "ERROR libro: libro bloqueado" in out.err
+    assert "Resumen: 1 correctas, 0 fallidas" in out.out and "OK FAKE-OK" in out.out

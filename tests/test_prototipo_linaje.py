@@ -1,5 +1,6 @@
 """Prototipo de mapeo origen -> destino y control de cargas (Tarea 18)."""
 import re
+from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -120,3 +121,52 @@ def test_hoja_del_libro_mapeo():
     from prototipos.linaje import hoja_libro
     (nombre, df), = hoja_libro.hojas()
     assert nombre == "Mapeo (prototipo)" and list(df.columns) == COLUMNAS_MAPEO and len(df) > 100
+
+
+def test_archivo_y_hash_se_resuelven_tras_ejecutar_y_cubren_varios_archivos(tmp_path, monkeypatch):
+    import hashlib
+    from etl.lib import mivau
+
+    def descargar_falso(url, dataset_id, destino=None):
+        ruta = tmp_path / f"{dataset_id}_{date.today():%Y%m%d}.xls"
+        ruta.write_bytes(dataset_id.encode())
+        return ruta
+
+    monkeypatch.setattr(mivau, "descargar", descargar_falso)
+
+    def ejecutar(hoy):  # descarga dos boletines con ids distintos del dataset (como la ETI)
+        mivau.descargar("u", "MIVAU-340101a0", tmp_path)
+        mivau.descargar("u", "MIVAU-340101b0", tmp_path)
+        return pd.DataFrame({"x": [1]})
+
+    fuente = SimpleNamespace(DATASET_ID="D1", TABLA="t1", MEDIDAS=["x"], DIMENSIONES=[], CUADRE=False,
+                             ejecutar=ejecutar)
+    monkeypatch.setattr(g, "REGISTRO", {"D1": fuente})
+    monkeypatch.setattr(g, "url_de", lambda i: "http://x")
+    (fila,) = g.ejecutar_con_control(["D1"], tmp_path / "c.csv", version="v")
+    assert fila["estado"] == "OK"
+    assert "MIVAU-340101a0" in fila["archivo"] and "MIVAU-340101b0" in fila["archivo"]
+    esperado = hashlib.sha256("\n".join(
+        f"MIVAU-340101{k}0_{date.today():%Y%m%d}.xls:{hashlib.sha256(f'MIVAU-340101{k}0'.encode()).hexdigest()}"
+        for k in "ab").encode()).hexdigest()
+    assert fila["hash_sha256_archivo"] == esperado
+    assert mivau.descargar is descargar_falso  # el envoltorio restaura la función original
+
+
+def test_archivo_es_el_de_la_descarga_de_esta_ejecucion_no_el_de_ayer(tmp_path, monkeypatch):
+    from etl.lib import mivau
+    (tmp_path / "D1_20200101.xls").write_bytes(b"ayer")
+
+    def descargar_falso(url, dataset_id, destino=None):
+        ruta = tmp_path / f"{dataset_id}_{date.today():%Y%m%d}.xls"
+        ruta.write_bytes(b"hoy")
+        return ruta
+    monkeypatch.setattr(mivau, "descargar", descargar_falso)
+    fuente = SimpleNamespace(DATASET_ID="D1", TABLA="t1", MEDIDAS=["x"], DIMENSIONES=[], CUADRE=False,
+                             ejecutar=lambda hoy: (mivau.descargar("u", "D1", tmp_path), pd.DataFrame({"x": [1]}))[1])
+    monkeypatch.setattr(g, "REGISTRO", {"D1": fuente})
+    monkeypatch.setattr(g, "url_de", lambda i: "http://x")
+    (fila,) = g.ejecutar_con_control(["D1"], tmp_path / "c.csv", version="v")
+    assert fila["archivo"] == f"D1_{date.today():%Y%m%d}.xls"
+    import hashlib
+    assert fila["hash_sha256_archivo"] == hashlib.sha256(b"hoy").hexdigest()

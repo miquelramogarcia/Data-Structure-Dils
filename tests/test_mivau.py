@@ -245,3 +245,29 @@ def test_leer_serie_vertical_real():
         assert df.territorio_txt.unique().tolist() == ["TOTAL NACIONAL"]
         assert df.anio.min() == 1991 and (df.anio.max(), df[df.anio == 2026].mes.max()) == (2026, 6)
         assert not ((df.anio == 2025) & df.mes.isna()).any()
+
+
+def test_descargar_escribe_atomico_sin_dejar_part(monkeypatch, tmp_path):
+    monkeypatch.setattr(mivau.requests, "get", lambda *a, **k: _Resp(200, b"\xd0\xcf\x11\xe0datos"))
+    ruta = descargar("http://x/f.xls", "D1", tmp_path)
+    assert ruta.read_bytes() == b"\xd0\xcf\x11\xe0datos"
+    assert [p.name for p in tmp_path.iterdir()] == [ruta.name]
+
+
+@pytest.mark.parametrize("html", [b"<!DOCTYPE html><html>error</html>", b"  \n<html><body>Error</body></html>"])
+def test_descargar_rechaza_html_con_200(monkeypatch, tmp_path, html):
+    monkeypatch.setattr(mivau.requests, "get", lambda *a, **k: _Resp(200, html))
+    with pytest.raises(RuntimeError, match="HTML"):
+        descargar("http://x/f.xls", "D1", tmp_path)
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_descargar_no_deja_archivo_si_falla_la_escritura(monkeypatch, tmp_path):
+    monkeypatch.setattr(mivau.requests, "get", lambda *a, **k: _Resp(200, b"abc"))
+
+    def _rompe(self, destino):
+        raise OSError("disco lleno")
+    monkeypatch.setattr(mivau.Path, "replace", _rompe)
+    with pytest.raises(OSError):
+        descargar("http://x/f.xls", "D1", tmp_path)
+    assert list(tmp_path.iterdir()) == []

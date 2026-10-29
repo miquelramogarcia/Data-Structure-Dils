@@ -14,6 +14,7 @@ import hashlib
 import re
 import subprocess
 import sys
+from contextlib import contextmanager
 from datetime import date, datetime
 from pathlib import Path
 from urllib.parse import unquote
@@ -299,9 +300,39 @@ def _version_codigo() -> str | None:
         return None
 
 
-def _ultima_descarga(dataset_id: str) -> Path | None:
-    candidatos = sorted(DESCARGAS.glob(f"{dataset_id}_*"))
-    return candidatos[-1] if candidatos else None
+@contextmanager
+def _capturar_descargas():
+    """Anota las rutas que devuelve `mivau.descargar` mientras dura el bloque (los archivos REALMENTE usados).
+
+    Las fuentes llaman a `mivau.descargar(...)` por atributo de módulo, así que basta sustituirlo aquí; no se toca
+    producción. Así se registran todos los archivos de las fuentes con varios boletines (ETI, valor medio, valor
+    tasado) y se evita adivinar el nombre a partir del dataset_id.
+    """
+    from etl.lib import mivau
+    original, rutas = mivau.descargar, []
+
+    def anotando(*a, **k):
+        ruta = original(*a, **k)
+        rutas.append(Path(ruta))
+        return ruta
+    mivau.descargar = anotando
+    try:
+        yield rutas
+    finally:
+        mivau.descargar = original
+
+
+def _resumen_archivos(rutas: list[Path]) -> tuple[str | None, str | None]:
+    """(archivo, hash) para la fila de control: un archivo -> su nombre y SHA-256; varios -> nombres unidos con '; '
+    (recortado a 255) y SHA-256 de las líneas 'nombre:sha256' ordenadas (identifica el conjunto exacto)."""
+    rutas = sorted({r for r in rutas if r.exists()})
+    if not rutas:
+        return None, None
+    if len(rutas) == 1:
+        return rutas[0].name, _sha256(rutas[0])
+    nombre = "; ".join(r.name for r in rutas)
+    conjunto = chr(10).join(f"{r.name}:{_sha256(r)}" for r in rutas)
+    return (nombre if len(nombre) <= 255 else nombre[:252] + "..."), hashlib.sha256(conjunto.encode()).hexdigest()
 
 
 def ejecutar_con_control(ids: list[str], destino: Path = EJEMPLO_CSV, *, archivos: dict[str, Path] | None = None,
@@ -310,8 +341,9 @@ def ejecutar_con_control(ids: list[str], destino: Path = EJEMPLO_CSV, *, archivo
     """Ejecuta las fuentes como `etl.ejecutar_todo` (una fuente que falla no detiene a las demás) y anexa una fila
     por fuente a `destino` con las columnas de META.control_cargas. No modifica `etl.ejecutar_todo`.
 
-    `archivos`: dataset_id -> archivo descargado (por defecto, el más reciente de etl/descargas/<id>_*; si no hay,
-    archivo y hash quedan vacíos: las fuentes con varios archivos solo registran uno). `ejecutar_fuente(fuente, hoy)`
+    `archivos`: dataset_id -> archivo de origen (por defecto, los que la fuente descarga durante la ejecución, que se
+    resuelven DESPUÉS de ejecutarla: una fuente con varios boletines registra todos, ver `_resumen_archivos`; si no
+    descarga nada, archivo y hash quedan vacíos). `ejecutar_fuente(fuente, hoy)`
     sustituye a `fuente.ejecutar(hoy)` (para pruebas o fixtures); `contar_leidas(ruta)` informa `filas_leidas`.
     """
     hoy = hoy or date.today()
@@ -323,20 +355,25 @@ def ejecutar_con_control(ids: list[str], destino: Path = EJEMPLO_CSV, *, archivo
     filas = []
     for i in ids:
         fuente = REGISTRO[i]
-        ruta = (archivos or {}).get(i) or _ultima_descarga(i)
+        explicito = (archivos or {}).get(i)
         inicio = datetime.now().replace(microsecond=0)
         fila = {"id_carga": siguiente, "dataset_id": i, "tabla": fuente.TABLA, "url": url_de(i),
-                "archivo": ruta.name if ruta else None,
-                "hash_sha256_archivo": _sha256(ruta) if ruta and ruta.exists() else None,
+                "archivo": None, "hash_sha256_archivo": None,
                 "fecha_descarga": hoy.isoformat(), "inicio": inicio, "filas_leidas": None, "filas_escritas": None,
                 "avisos_cuadre": None, "version_codigo": version, "script": script, "mensaje_error": None}
+        rutas: list[Path] = []
         try:
-            tabla = ejecutar_fuente(fuente, hoy)
+            with _capturar_descargas() as descargadas:
+                try:
+                    tabla = ejecutar_fuente(fuente, hoy)
+                finally:  # el archivo se resuelve tras ejecutar (la fuente descarga dentro), también si falla
+                    rutas = [explicito] if explicito else list(descargadas)
+                    fila["archivo"], fila["hash_sha256_archivo"] = _resumen_archivos(rutas)
             if getattr(fuente, "CUADRE", True):
                 fila["avisos_cuadre"] = len(cuadre_jerarquico(tabla, fuente.MEDIDAS[0], fuente.DIMENSIONES))
             fila["filas_escritas"] = len(tabla)
-            if contar_leidas and ruta:
-                fila["filas_leidas"] = contar_leidas(ruta)
+            if contar_leidas and len(rutas) == 1:
+                fila["filas_leidas"] = contar_leidas(rutas[0])
             fila["estado"] = "OK"
         except Exception as e:  # igual que ejecutar_todo: se registra y se sigue
             fila["estado"], fila["mensaje_error"] = "ERROR", str(e)

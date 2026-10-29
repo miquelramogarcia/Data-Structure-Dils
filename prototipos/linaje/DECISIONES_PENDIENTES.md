@@ -29,9 +29,13 @@ Se regenera con `python -m prototipos.linaje.generar` (y `--ejemplo` para `contr
 - **`anio`, `trimestre` y `mes`** se mapean como "columna generada por MySQL" (`campos.csv`, columna `generado`),
   porque el CSV las lleva pero la carga las omite.
 - **`control_cargas`**: `filas_leidas` es opcional (cada fuente tendría que informarlo; el prototipo solo lo calcula
-  con un contador que se le pasa) y `avisos_cuadre` es NULL cuando el cuadre no aplica (medias). En fuentes con varios
-  archivos (ETI, valor medio, valor tasado) la fila solo recoge un archivo/hash: haría falta una fila por archivo
-  o una tabla hija.
+  con un contador que se le pasa) y `avisos_cuadre` es NULL cuando el cuadre no aplica (medias). El archivo y el hash se
+  resuelven DESPUÉS de ejecutar la fuente, anotando lo que devuelve `mivau.descargar` (la primera ejecución del día ya
+  no registra el archivo de ayer, y los boletines MIVAU-ETI, guardados como `MIVAU-340101x0_*`, sí quedan). En
+  fuentes con varios archivos (ETI, valor medio, valor tasado) `archivo` lista todos separados por `; ` (recortado a
+  255 caracteres: los 9 de la ETI no caben enteros) y `hash_sha256_archivo` es el SHA-256 de las líneas
+  `nombre:sha256` ordenadas. Limitación: ese hash identifica el conjunto, no cada archivo; para consultar por
+  archivo haría falta una fila por archivo o una tabla hija.
 - **Envoltorio, no cambio de producción**: `ejecutar_con_control` replica la lógica de `ejecutar_todo` (una fuente que
   falla no detiene a las demás) sin modificarlo. Si se adopta, lo natural es que `ejecutar_todo` lo llame.
 - **Ejemplo real sin red**: `control_cargas_ejemplo.csv` sale de ejecutar la envoltura sobre la fixture

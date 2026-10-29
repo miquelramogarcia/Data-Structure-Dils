@@ -1,4 +1,9 @@
-"""Siembra el catálogo (tablas.csv y campos.csv) desde el Excel del usuario. Se ejecuta una sola vez."""
+"""Siembra el catálogo (tablas.csv y campos.csv) desde el Excel del usuario. Se ejecuta UNA sola vez.
+
+PELIGROSO: sobrescribe tablas.csv y campos.csv, que ya contienen todos los cambios posteriores a la siembra.
+Por eso se niega a ejecutarse si existen, salvo con `--forzar`.
+"""
+import sys
 from pathlib import Path
 
 import pandas as pd
@@ -45,7 +50,12 @@ def _emparejar(tablas: pd.DataFrame, general: pd.DataFrame) -> list[int]:
     return res
 
 
-def sembrar(xlsx: Path = XLSX) -> None:
+def sembrar(xlsx: Path = XLSX, forzar: bool = False) -> None:
+    existentes = [f for f in ("tablas.csv", "campos.csv") if (DIR / f).exists()]
+    if existentes and not forzar:
+        raise SystemExit(f"sembrar se niega a sobrescribir {', '.join(existentes)}: el catálogo es ya la fuente de "
+                         f"verdad y contiene cambios posteriores a la siembra que se perderían. Si de verdad "
+                         f"quieres rehacerlo desde el Excel, repite con --forzar (haz antes copia o commit).")
     tablas = leer_hoja_usuario(xlsx, "Tablas", dtype=str)
     campos = leer_hoja_usuario(xlsx, "Campos", dtype=str)
     general = leer_hoja_usuario(xlsx, "General", dtype=str)
@@ -87,4 +97,4 @@ def sembrar(xlsx: Path = XLSX) -> None:
 
 
 if __name__ == "__main__":
-    sembrar()
+    sembrar(forzar="--forzar" in sys.argv[1:])
