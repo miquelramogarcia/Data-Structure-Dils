@@ -26,7 +26,7 @@ Data Dils/
     create_tables.sql             esquemas y CREATE TABLE (generado desde el catálogo)
     load_data.sql                 un LOAD DATA LOCAL INFILE por tabla con datos (generado)
   etl/
-    catalogo/                     tablas.csv, campos.csv, glosario.csv (fuente de verdad), sql.py (genera el SQL), sembrar.py (solo se usó una vez)
+    catalogo/                     tablas.csv, campos.csv, glosario.csv (fuente de verdad), sql.py (genera el SQL), sembrar.py (solo se usó una vez; protegido con `--forzar`)
     descargas/                    ficheros originales descargados (no se versionan)
     fuentes/                      un módulo por fuente (mivau_*.py)
     herramientas/                 utilidades puntuales (extraer_imagenes_xls.py, serpavi_muestra.py)
@@ -45,7 +45,7 @@ Data Dils/
 
 ## Catálogo y SQL
 
-El catálogo vive en `etl/catalogo/tablas.csv` y `etl/catalogo/campos.csv` (fuente de verdad, sembrado una sola vez desde el Excel del usuario con `python -m etl.catalogo.sembrar`; no volver a ejecutarlo: sobrescribiría los cambios posteriores). Para regenerar `sql/create_tables.sql` tras cambiar el catálogo:
+El catálogo vive en `etl/catalogo/tablas.csv` y `etl/catalogo/campos.csv` (fuente de verdad, sembrado una sola vez desde el Excel del usuario con `python -m etl.catalogo.sembrar`; **script de un solo uso y peligroso**: no volver a ejecutarlo, sobrescribiría los cambios posteriores; se niega a ejecutarse si los CSV existen salvo con `--forzar`). Para regenerar `sql/create_tables.sql` tras cambiar el catálogo:
 
 ```
 python -m etl.catalogo.sql
@@ -68,6 +68,10 @@ mysql --local-infile=1 -u USUARIO -p < sql/create_tables.sql
 mysql --local-infile=1 -u USUARIO -p < sql/load_data.sql     # desde la raíz del proyecto (rutas relativas)
 ```
 
+- `load_data.sql` emite `LOAD DATA LOCAL INFILE ... REPLACE INTO TABLE`: es un UPSERT. Las filas cuya clave primaria (`id_registro`) ya existe se actualizan con el CSV nuevo (sin `REPLACE`, con `LOCAL` MySQL las ignoraría en silencio). Las filas que la fuente deja de publicar NO se borran de la tabla.
+- Cada carga va seguida de `SHOW WARNINGS LIMIT 20;` para ver avisos (truncados, conversiones).
+- Las rutas de `LOAD DATA LOCAL INFILE` son relativas al directorio de trabajo del CLIENTE: ejecuta `mysql --local-infile=1` desde la raíz del proyecto. MySQL Workbench no resuelve rutas relativas: allí hay que usar rutas absolutas.
+
 - `local_infile` debe estar activo en el servidor (`SET GLOBAL local_infile = 1;`) y en el cliente (`--local-infile=1`).
 - `anio`, `trimestre` y `mes` son columnas generadas (`GENERATED ALWAYS AS ... STORED`) calculadas por MySQL desde `fecha` y `frecuencia`, de modo que nunca contradicen la fecha. MySQL no admite valores explícitos en ellas, por eso `load_data.sql` las lee en variables `@omitir_*` y las descarta; el catálogo las marca en la columna `generado` de `campos.csv` (hoja Campos: "Generada como"). Los CSV conservan las tres columnas.
 - En los CSV, NULL es el campo vacío: las columnas que admiten NULL se cargan con `NULLIF(@var, '')`.
@@ -76,7 +80,7 @@ mysql --local-infile=1 -u USUARIO -p < sql/load_data.sql     # desde la raíz de
 
 ## Requisitos e instalación
 
-Python 3.13.
+Python 3.13 (probado con pandas 3.0.3, openpyxl 3.1.5, xlrd 2.0.2, requests 2.34.2, pytest 8.3.4; `requirements.txt` fija rangos compatibles).
 
 ```
 python -m pip install -r requirements.txt
