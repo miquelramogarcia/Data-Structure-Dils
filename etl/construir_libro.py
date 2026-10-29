@@ -22,6 +22,7 @@ FILAS_MUESTRA = 100_000
 MAX_HOJA = 31
 ANCHO_MAX = 60
 ANCHO_CREATE = 100
+ALTO_FILA = 15
 ERRORES_EXCEL = {"#REF!", "#VALUE!", "#DIV/0!", "#N/A", "#NAME?", "#NULL!", "#NUM!"}
 NOTA_KPIS = "Columna vaciada: contenía #VALUE! (fórmulas rotas por vínculo externo perdido)"
 
@@ -84,9 +85,10 @@ def _escribir(wb: Workbook, nombre: str, df: pd.DataFrame, *, fechas=(), nota: s
     for j, c in enumerate(cols, 1):
         cel = ws.cell(fila_cab, j, c)
         cel.font, cel.fill = FUENTE_CAB, RELLENO_CAB
-        cel.alignment = Alignment(vertical="top" if superior else "center", wrap_text=superior)
+        cel.alignment = Alignment(vertical="top" if superior else "center")
     textos = {j for j, c in enumerate(cols, 1) if str(c).startswith("cod_")}
-    envolver = Alignment(vertical="top", wrap_text=True)
+    # Sin ajuste de texto: todas las filas con la misma altura (petición del usuario, 2026-10-29).
+    envolver = Alignment(vertical="top", wrap_text=False)
     arriba = Alignment(vertical="top")
     for i, fila in enumerate(df.astype(object).itertuples(index=False, name=None), fila_cab + 1):
         for j, v in enumerate(fila, 1):
@@ -101,6 +103,8 @@ def _escribir(wb: Workbook, nombre: str, df: pd.DataFrame, *, fechas=(), nota: s
                 cel.number_format = FORMATO_FECHA
             if superior:
                 cel.alignment = envolver if cols[j - 1] in ajustar else arriba
+    ws.sheet_format.defaultRowHeight = ALTO_FILA
+    ws.sheet_format.customHeight = True
     if cols:
         ws.freeze_panes = ws.cell(fila_cab + 1, 1)
         ws.auto_filter.ref = f"A{fila_cab}:{get_column_letter(len(cols))}{fila_cab + len(df)}"
@@ -179,7 +183,8 @@ def _hoja_datos(wb, tabla: str, hoja: str, campos: pd.DataFrame, dir_salida: Pat
         nota = (f"Muestra: primeras {FILAS_MUESTRA} de {total} filas. "
                 f"La tabla completa está en etl/salida/{tabla}.csv")
     df, fechas = _tipar(df, campos)
-    _escribir(wb, hoja, df, fechas=fechas, nota=nota)
+    # Hojas de import ocultas (petición del usuario, 2026-10-29); se muestran con clic derecho > Mostrar.
+    _escribir(wb, hoja, df, fechas=fechas, nota=nota).sheet_state = "hidden"
     return total
 
 
