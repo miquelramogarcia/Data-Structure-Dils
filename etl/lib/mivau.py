@@ -96,45 +96,97 @@ def _texto_valor(celda) -> str:
     return str(celda).strip()
 
 
-def _leer_hoja(hoja) -> list[tuple]:
-    filas = [[hoja.cell_value(r, c) for c in range(hoja.ncols)] for r in range(hoja.nrows)]
-    # Cabeceras: fila del año y, hasta 3 filas debajo, la del subperiodo.
+def _en_blanco(celda) -> bool:
+    return celda == "" or (isinstance(celda, str) and not celda.strip())
+
+
+class SinCabecera(ValueError):
+    """La hoja no tiene bloque de cabeceras (año + subperiodo)."""
+
+
+_RE_PIE = re.compile(r"^\s*(fuente|nota|notas|nd\s*-|\(|\*)", re.IGNORECASE)
+
+
+def _es_pie(texto: str) -> bool:
+    t = texto.strip()
+    return bool(_RE_PIE.match(t)) or (len(t) > 60 and t.endswith("."))
+
+
+def _parsear_valores(nombre: str, filas: list[list]) -> list[dict]:
+    """Convierte la matriz 2-D de una hoja en filas largas (hoja, territorio_txt, anio, subperiodo_txt, valor_txt).
+
+    Cabeceras: fila del año (regex 19xx/20xx, arrastrada a la derecha) y, en las 3 filas siguientes, la
+    primera con >= 2 subperiodos válidos. Las columnas cuyo subperiodo no es mes/trimestre (Total, Media,
+    Año...) se ignoran. La columna del territorio es la anterior a la primera columna de periodo.
+
+    Fila de territorio: tras las cabeceras y antes de la primera línea de pie (empieza por Fuente, Nota,
+    "(", "*" o "ND-", o es una frase larga acabada en "."), con texto en la columna del territorio y al
+    menos una celda no vacía (número, '-', '..' o texto) en las columnas activas. Columna activa: tiene
+    algún valor no vacío en alguna fila de territorio; las de relleno (meses futuros) se saltan. Para cada
+    fila se emite una fila por columna activa: la celda vacía da valor_txt "" y el texto ("ND", "(p)")
+    pasa tal cual; a_numero los convierte en None.
+    """
     for r, fila in enumerate(filas[:40]):
         if not any(_anio_de(c) for c in fila):
             continue
-        for rs in range(r + 1, min(r + 4, len(filas))):
-            if sum(_es_subperiodo(c) for c in filas[rs]) >= 2:
+        rs = next((x for x in range(r + 1, min(r + 4, len(filas)))
+                   if sum(_es_subperiodo(c) for c in filas[x]) >= 2), None)
+        if rs is not None:
+            break
+    else:
+        raise SinCabecera(f"Hoja {nombre!r}: no se encuentra la cabecera de año/subperiodo")
+    anios, actual = [], None
+    for c in fila:
+        actual = _anio_de(c) or actual
+        anios.append(actual)
+    cols = [(c, anios[c], str(filas[rs][c]).strip()) for c in range(len(filas[rs]))
+            if anios[c] and _es_subperiodo(filas[rs][c])]
+    col_terr = cols[0][0] - 1
+    if col_terr < 0:
+        raise ValueError(f"Hoja {nombre!r}: no hay columna de territorio a la izquierda de los periodos")
+    candidatas = []
+    for fila_d in filas[rs + 1:]:
+        terr = fila_d[col_terr]
+        if isinstance(terr, str) and terr.strip():
+            if _es_pie(terr):
                 break
-        else:
+            candidatas.append((terr.strip(), fila_d))
+    activas = [(c, a, s) for c, a, s in cols if any(not _en_blanco(f[c]) for _, f in candidatas)]
+    out = []
+    for terr, fila_d in candidatas:
+        if all(_en_blanco(fila_d[c]) for c, _, _ in activas):
             continue
-        # Año arrastrado hacia la derecha hasta el siguiente año.
-        anios, actual = [], None
-        for c in fila:
-            actual = _anio_de(c) or actual
-            anios.append(actual)
-        cols = [(c, anios[c], str(filas[rs][c]).strip()) for c in range(len(filas[rs]))
-                if anios[c] and _es_subperiodo(filas[rs][c])]
-        col_terr = cols[0][0] - 1
-        out = []
-        for fila_d in filas[rs + 1:]:
-            terr = fila_d[col_terr] if col_terr >= 0 else ""
-            if not isinstance(terr, str) or not terr.strip():
-                continue
-            vals = [(a, s, fila_d[c]) for c, a, s in cols
-                    if fila_d[c] != "" and (isinstance(fila_d[c], float) or str(fila_d[c]).strip() in _NULOS)]
-            if not any(isinstance(v, float) for _, _, v in vals):
-                continue  # nota, fuente o fila sin datos
-            out += [(terr.strip(), a, s, _texto_valor(v)) for a, s, v in vals]
-        return out
-    return []
+        out += [{"hoja": nombre, "territorio_txt": terr, "anio": a, "subperiodo_txt": s,
+                 "valor_txt": "" if _en_blanco(fila_d[c]) else _texto_valor(fila_d[c])}
+                for c, a, s in activas]
+    if not out:
+        raise ValueError(f"Hoja {nombre!r}: no se encuentran filas de territorio con datos")
+    return out
 
 
 def leer_matriz(path: Path, hojas: list[str] | None = None) -> pd.DataFrame:
-    """Lee un boletín MIVAU y devuelve formato largo: hoja, territorio_txt, anio, subperiodo_txt, valor_txt."""
+    """Lee un boletín MIVAU y devuelve formato largo: hoja, territorio_txt, anio, subperiodo_txt, valor_txt.
+
+    Con `hojas`, cada nombre debe existir y tener cabeceras (ValueError con el nombre de la hoja si no).
+    Sin `hojas`, se saltan las hojas sin cabecera, pero se exige al menos una con datos.
+    """
     wb = xlrd.open_workbook(str(path))
+    existentes = wb.sheet_names()
+    if hojas is not None:
+        faltan = [h for h in hojas if h not in existentes]
+        if faltan:
+            raise ValueError(f"Hojas no encontradas en {Path(path).name}: {faltan}; hay {existentes}")
     filas = []
-    for nombre in wb.sheet_names():
+    for nombre in existentes:
         if hojas is not None and nombre not in hojas:
             continue
-        filas += [(nombre,) + f for f in _leer_hoja(wb.sheet_by_name(nombre))]
+        hoja = wb.sheet_by_name(nombre)
+        matriz = [[hoja.cell_value(r, c) for c in range(hoja.ncols)] for r in range(hoja.nrows)]
+        try:
+            filas += _parsear_valores(nombre, matriz)
+        except SinCabecera:
+            if hojas is not None:
+                raise
+    if not filas:
+        raise ValueError(f"{Path(path).name}: ninguna hoja con cabeceras y datos")
     return pd.DataFrame(filas, columns=["hoja", "territorio_txt", "anio", "subperiodo_txt", "valor_txt"])
