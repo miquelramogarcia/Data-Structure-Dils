@@ -6,6 +6,7 @@ import pytest
 
 from etl.catalogo.sql import cargar_catalogo
 from etl.fuentes import REGISTRO, mivau_31205000 as vpo
+from etl.lib.fuente_comun import escribir_csv
 from etl.lib.territorios import cargar_maestro, leer_hoja_usuario
 from etl.lib.validar import validar_tabla
 
@@ -52,7 +53,7 @@ def test_vpo_validacion_limpia(tabla):
 
 
 def test_vpo_escribe_csv_iso(tabla, tmp_path):
-    ruta = vpo.escribir_csv(tabla, tmp_path)
+    ruta = escribir_csv(tabla, vpo.TABLA, tmp_path)
     leido = pd.read_csv(ruta, sep=";", dtype=str, encoding="utf-8")
     assert leido["fecha"].iloc[0] == "2008-01-01" and leido["fecha_descarga"].iloc[0] == "2026-10-29"
 
