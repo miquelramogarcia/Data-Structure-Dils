@@ -60,7 +60,8 @@ mysql --local-infile=1 -u USUARIO -p < sql/load_data.sql     # desde la raíz de
 - `local_infile` debe estar activo en el servidor (`SET GLOBAL local_infile = 1;`) y en el cliente (`--local-infile=1`).
 - `anio`, `trimestre` y `mes` son columnas generadas (`GENERATED ALWAYS AS ... STORED`) calculadas por MySQL desde `fecha` y `frecuencia`, de modo que nunca contradicen la fecha. MySQL no admite valores explícitos en ellas, por eso `load_data.sql` las lee en variables `@omitir_*` y las descarta; el catálogo las marca en la columna `generado` de `campos.csv` (hoja Campos: "Generada como"). Los CSV conservan las tres columnas.
 - En los CSV, NULL es el campo vacío: las columnas que admiten NULL se cargan con `NULLIF(@var, '')`.
-- Los CSV usan fin de línea CRLF (los escribe pandas en Windows); `load_data.sql` lo declara así (`\r\n`).
+- Los CSV terminan siempre en LF en cualquier sistema (`escribir_csv` fuerza `lineterminator="\n"` y `.gitattributes` fija `eol=lf` para `etl/salida/*.csv`); `load_data.sql` declara `LINES TERMINATED BY '\n'` y `ESCAPED BY ''` (pandas no escapa con barra invertida). Un test lo comprueba.
+- El servidor debe usar modo SQL estricto (`STRICT_TRANS_TABLES`, el predeterminado de MySQL 8): un vacío en una columna NOT NULL debe fallar, no convertirse en 0 ni en `0000-00-00`.
 
 ## Requisitos e instalación
 

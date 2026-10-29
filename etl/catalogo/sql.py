@@ -7,8 +7,8 @@ import pandas as pd
 DIR = Path(__file__).parent
 SALIDA = DIR.parent.parent / "sql" / "create_tables.sql"
 SALIDA_CARGA = DIR.parent.parent / "sql" / "load_data.sql"
-# Los CSV de etl/salida/ los escribe pandas con el fin de línea del sistema (CRLF en Windows, donde se versionan).
-FIN_LINEA_CSV = "\\r\\n"
+# Los CSV de etl/salida/ terminan siempre en LF (escribir_csv fuerza lineterminator y .gitattributes fija eol=lf).
+FIN_LINEA_CSV = "\n"
 
 
 def cargar_catalogo() -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -41,6 +41,10 @@ def create_table_sql(esquema: str, tabla: str, campos: pd.DataFrame, estadistica
             f") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci COMMENT='{_lit(estadistica)}';")
 
 
+def _sql_escapes(txt: str) -> str:
+    return txt.replace("\r", "\\r").replace("\n", "\\n")
+
+
 def load_data_sql(esquema: str, tabla: str, campos: pd.DataFrame, ruta_csv: str | None = None) -> str:
     """LOAD DATA LOCAL INFILE de `etl/salida/<tabla>.csv`.
 
@@ -62,8 +66,8 @@ def load_data_sql(esquema: str, tabla: str, campos: pd.DataFrame, ruta_csv: str 
             sets.append(f"`{campo}` = NULLIF(@{campo}, '')")
     cierre = ";" if not sets else "\nSET " + ",\n    ".join(sets) + ";"
     return (f"LOAD DATA LOCAL INFILE '{_lit(ruta)}' INTO TABLE `{esquema}`.`{tabla}`\n"
-            f"CHARACTER SET utf8mb4 FIELDS TERMINATED BY ';' OPTIONALLY ENCLOSED BY '\"' "
-            f"LINES TERMINATED BY '{FIN_LINEA_CSV}'\nIGNORE 1 LINES\n(" + ", ".join(cols) + ")" + cierre)
+            f"CHARACTER SET utf8mb4 FIELDS TERMINATED BY ';' OPTIONALLY ENCLOSED BY '\"' ESCAPED BY '' "
+            f"LINES TERMINATED BY '{_sql_escapes(FIN_LINEA_CSV)}'\nIGNORE 1 LINES\n(" + ", ".join(cols) + ")" + cierre)
 
 
 def descripcion_tabla(tablas: pd.DataFrame, esquema: str, tabla: str) -> str:

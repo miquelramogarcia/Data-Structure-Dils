@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pandas as pd
 
 from etl.catalogo.sql import cargar_catalogo, create_table_sql
@@ -110,21 +112,48 @@ def test_load_data_omite_generadas_y_usa_nullif():
     assert "(`id_registro`, `frecuencia`, @omitir_anio, @omitir_trimestre, `fecha`, @valor)" in sql
     assert "SET `valor` = NULLIF(@valor, '');" in sql
     assert "LOAD DATA LOCAL INFILE 'etl/salida/t.csv' INTO TABLE `MIVAU`.`t`" in sql
-    assert r"LINES TERMINATED BY '\r\n'" in sql and "IGNORE 1 LINES" in sql
+    assert r"LINES TERMINATED BY '\n'" in sql and "IGNORE 1 LINES" in sql
+    assert "ESCAPED BY ''" in sql
 
 
-def test_load_data_columnas_igual_que_cabecera_csv():
+RAIZ = Path(__file__).parent.parent
+
+
+def test_load_data_columnas_igual_que_cabecera_csv(tmp_path):
     import re
-    from etl.catalogo.sql import SALIDA_CARGA, escribir_carga
-    from pathlib import Path
-    escribir_carga()
-    texto = SALIDA_CARGA.read_text(encoding="utf-8")
+    from etl.catalogo.sql import escribir_carga
+    destino = tmp_path / "load_data.sql"
+    escribir_carga(destino)
+    texto = destino.read_text(encoding="utf-8")
+    tablas, _ = cargar_catalogo()
+    con_csv = {t for t in tablas[(tablas["estado"] == "con_datos") & (tablas["tabla"] != "")]["tabla"]
+               if (RAIZ / "etl" / "salida" / f"{t}.csv").exists()}
     sentencias = re.findall(r"INTO TABLE `\w+`\.`(\w+)`.*?IGNORE 1 LINES\n\((.*?)\)", texto, re.S)
-    assert len(sentencias) == 12
+    assert {t for t, _ in sentencias} == con_csv
+    assert len(sentencias) == len(con_csv)
     for tabla, cols in sentencias:
-        cabecera = Path("etl/salida", f"{tabla}.csv").open(encoding="utf-8").readline().strip().split(";")
+        with (RAIZ / "etl" / "salida" / f"{tabla}.csv").open(encoding="utf-8", newline="") as f:
+            cabecera = f.readline().rstrip("\r\n").split(";")
         lista = [c.strip() for c in cols.split(",")]
         assert len(lista) == len(cabecera), tabla
         for var, col in zip(lista, cabecera):
             assert var.strip("`@").replace("omitir_", "", 1) == col, (tabla, var, col)
             assert var.startswith("@omitir_") == (col in ("anio", "trimestre", "mes")), (tabla, col)
+
+
+def test_csv_terminan_en_el_terminador_de_load_data():
+    from etl.catalogo.sql import FIN_LINEA_CSV
+    rutas = sorted((RAIZ / "etl" / "salida").glob("*.csv"))
+    assert rutas
+    for ruta in rutas:
+        with ruta.open("rb") as f:
+            cabecera = f.readline(1_000_000)
+            resto = f.read(5_000_000)
+        assert cabecera.endswith(FIN_LINEA_CSV.encode()) and not cabecera.endswith(b"\r\n"), ruta.name
+        assert b"\r\n" not in resto, ruta.name
+
+
+def test_escribir_csv_usa_lf(tmp_path):
+    from etl.lib.fuente_comun import escribir_csv
+    ruta = escribir_csv(pd.DataFrame({"a": [1, 2], "b": ["x", "y"]}), "t", tmp_path)
+    assert b"\r" not in ruta.read_bytes()

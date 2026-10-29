@@ -36,7 +36,7 @@ def escribir_csv(df: pd.DataFrame, tabla: str, destino: Path = SALIDA) -> Path:
     destino = Path(destino)
     destino.mkdir(parents=True, exist_ok=True)
     ruta = destino / f"{tabla}.csv"
-    df.to_csv(ruta, sep=";", index=False, encoding="utf-8")
+    df.to_csv(ruta, sep=";", index=False, encoding="utf-8", lineterminator="\n")
     return ruta
 
 
