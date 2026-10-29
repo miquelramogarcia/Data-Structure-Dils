@@ -76,3 +76,55 @@ def test_real_ninguna_tabla_se_crea_dos_veces(tmp_path):
     sql.escribir_sql(destino)
     creadas = [l for l in destino.read_text(encoding="utf-8").splitlines() if l.startswith("CREATE TABLE")]
     assert len(creadas) == len(set(creadas))
+
+
+# --- columnas generadas y carga ---
+import pandas as pd
+
+from etl.catalogo.sql import load_data_sql
+
+
+def _campos_gen():
+    filas = [("id_registro", "VARCHAR(64)", "NO", "PRIMARY KEY", ""), ("frecuencia", "CHAR(1)", "NO", "", ""),
+             ("anio", "SMALLINT UNSIGNED", "NO", "", "YEAR(fecha)"),
+             ("trimestre", "TINYINT UNSIGNED", "SÍ", "", "CASE WHEN frecuencia = 'T' THEN QUARTER(fecha) END"),
+             ("fecha", "DATE", "NO", "INDEX", ""), ("valor", "INT", "SÍ", "", "")]
+    return pd.DataFrame([dict(tabla="t", campo=c, tipo_mysql=t, nulo=n, clave=k, descripcion="d", ejemplo="", generado=g)
+                         for c, t, n, k, g in filas])
+
+
+def test_create_columna_generada():
+    sql = create_table_sql("MIVAU", "t", _campos_gen())
+    assert "`anio` SMALLINT UNSIGNED GENERATED ALWAYS AS (YEAR(fecha)) STORED NOT NULL COMMENT 'd'" in sql
+    assert "`trimestre` TINYINT UNSIGNED GENERATED ALWAYS AS (CASE WHEN frecuencia = 'T' THEN QUARTER(fecha) END) STORED NULL" in sql
+    assert "`valor` INT NULL" in sql and "GENERATED" not in sql.split("`valor`")[1]
+
+
+def test_create_sin_columna_generado_sigue_funcionando():
+    campos = _campos_gen().drop(columns="generado")
+    assert "GENERATED" not in create_table_sql("MIVAU", "t", campos)
+
+
+def test_load_data_omite_generadas_y_usa_nullif():
+    sql = load_data_sql("MIVAU", "t", _campos_gen())
+    assert "(`id_registro`, `frecuencia`, @omitir_anio, @omitir_trimestre, `fecha`, @valor)" in sql
+    assert "SET `valor` = NULLIF(@valor, '');" in sql
+    assert "LOAD DATA LOCAL INFILE 'etl/salida/t.csv' INTO TABLE `MIVAU`.`t`" in sql
+    assert r"LINES TERMINATED BY '\r\n'" in sql and "IGNORE 1 LINES" in sql
+
+
+def test_load_data_columnas_igual_que_cabecera_csv():
+    import re
+    from etl.catalogo.sql import SALIDA_CARGA, escribir_carga
+    from pathlib import Path
+    escribir_carga()
+    texto = SALIDA_CARGA.read_text(encoding="utf-8")
+    sentencias = re.findall(r"INTO TABLE `\w+`\.`(\w+)`.*?IGNORE 1 LINES\n\((.*?)\)", texto, re.S)
+    assert len(sentencias) == 12
+    for tabla, cols in sentencias:
+        cabecera = Path("etl/salida", f"{tabla}.csv").open(encoding="utf-8").readline().strip().split(";")
+        lista = [c.strip() for c in cols.split(",")]
+        assert len(lista) == len(cabecera), tabla
+        for var, col in zip(lista, cabecera):
+            assert var.strip("`@").replace("omitir_", "", 1) == col, (tabla, var, col)
+            assert var.startswith("@omitir_") == (col in ("anio", "trimestre", "mes")), (tabla, col)

@@ -48,6 +48,20 @@ No se edita el SQL a mano. Las tablas sin campos diseñados aún se omiten. Cuan
 
 Distritos y secciones censales: `cargar_maestro` añade también `etl/lib/secciones_serpavi.csv` (10.503 distritos, `DI` + 7 dígitos, y 36.293 secciones, `SC` + 10 dígitos, del seccionado del Censo 2021 tal como lo trae SERPAVI; mismas 12 columnas, `nivel` Distrito / Seccion). Cada código cuelga de un municipio del INE. Se regenera con `python -m etl.lib.secciones_serpavi_generar etl/descargas/MIVAU-SERPAVI_AAAAMMDD.xlsx`. Estos niveles se buscan por código con `territorio_por_codigo(maestro, cod_territorio)`, nunca por nombre.
 
+## Importar a MySQL
+
+Orden: primero `sql/create_tables.sql` (esquemas y tablas) y después `sql/load_data.sql` (un `LOAD DATA LOCAL INFILE` por tabla con datos, leyendo `etl/salida/<tabla>.csv`). Ambos se regeneran con `python -m etl.catalogo.sql`.
+
+```
+mysql --local-infile=1 -u USUARIO -p < sql/create_tables.sql
+mysql --local-infile=1 -u USUARIO -p < sql/load_data.sql     # desde la raíz del proyecto (rutas relativas)
+```
+
+- `local_infile` debe estar activo en el servidor (`SET GLOBAL local_infile = 1;`) y en el cliente (`--local-infile=1`).
+- `anio`, `trimestre` y `mes` son columnas generadas (`GENERATED ALWAYS AS ... STORED`) calculadas por MySQL desde `fecha` y `frecuencia`, de modo que nunca contradicen la fecha. MySQL no admite valores explícitos en ellas, por eso `load_data.sql` las lee en variables `@omitir_*` y las descarta; el catálogo las marca en la columna `generado` de `campos.csv` (hoja Campos: "Generada como"). Los CSV conservan las tres columnas.
+- En los CSV, NULL es el campo vacío: las columnas que admiten NULL se cargan con `NULLIF(@var, '')`.
+- Los CSV usan fin de línea CRLF (los escribe pandas en Windows); `load_data.sql` lo declara así (`\r\n`).
+
 ## Requisitos e instalación
 
 Python 3.13.

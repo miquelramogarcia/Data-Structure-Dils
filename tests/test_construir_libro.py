@@ -217,3 +217,14 @@ def test_csv_no_versionado_ausente_deja_nota(tmp_path, capsys):
     assert "AVISO" in capsys.readouterr().out
     with pytest.raises(FileNotFoundError, match="otra_tabla"):
         construir_libro(ORIGEN, salida, dir_salida=tmp_path, catalogo=_catalogo_sintetico(["otra_tabla"]))
+
+
+def test_campos_muestra_columna_generada_como(libro_real):
+    ws = libro_real["Campos"]
+    cabecera = [c.value for c in next(ws.iter_rows(max_row=1))]
+    assert "Generada como" in cabecera
+    col = cabecera.index("Generada como")
+    campo = cabecera.index("Campo")
+    valores = {r[campo].value: r[col].value for r in ws.iter_rows(min_row=2) if r[campo].value in ("anio", "id_registro")}
+    assert valores["anio"] == "YEAR(fecha)"
+    assert not valores["id_registro"]

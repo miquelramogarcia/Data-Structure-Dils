@@ -6,6 +6,9 @@ import pandas as pd
 
 DIR = Path(__file__).parent
 SALIDA = DIR.parent.parent / "sql" / "create_tables.sql"
+SALIDA_CARGA = DIR.parent.parent / "sql" / "load_data.sql"
+# Los CSV de etl/salida/ los escribe pandas con el fin de línea del sistema (CRLF en Windows, donde se versionan).
+FIN_LINEA_CSV = "\\r\\n"
 
 
 def cargar_catalogo() -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -24,7 +27,9 @@ def create_table_sql(esquema: str, tabla: str, campos: pd.DataFrame, estadistica
     lineas = []
     for _, c in campos.iterrows():
         nulo = "NOT NULL" if str(c["nulo"]).strip().upper() == "NO" else "NULL"
-        lineas.append(f"  `{c['campo']}` {c['tipo_mysql']} {nulo} COMMENT '{_lit(c['descripcion'])}'")
+        generado = str(c.get("generado", "")).strip()
+        tipo = f"{c['tipo_mysql']} GENERATED ALWAYS AS ({generado}) STORED" if generado else c["tipo_mysql"]
+        lineas.append(f"  `{c['campo']}` {tipo} {nulo} COMMENT '{_lit(c['descripcion'])}'")
     pk = [c["campo"] for _, c in campos.iterrows() if str(c["clave"]).strip().upper() == "PRIMARY KEY"]
     if pk:
         lineas.append("  PRIMARY KEY (" + ", ".join(f"`{p}`" for p in pk) + ")")
@@ -34,6 +39,31 @@ def create_table_sql(esquema: str, tabla: str, campos: pd.DataFrame, estadistica
     cuerpo = ",\n".join(lineas)
     return (f"CREATE TABLE IF NOT EXISTS `{esquema}`.`{tabla}` (\n{cuerpo}\n"
             f") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci COMMENT='{_lit(estadistica)}';")
+
+
+def load_data_sql(esquema: str, tabla: str, campos: pd.DataFrame, ruta_csv: str | None = None) -> str:
+    """LOAD DATA LOCAL INFILE de `etl/salida/<tabla>.csv`.
+
+    MySQL rechaza valores explícitos en columnas generadas: se leen en variables `@omitir_<col>` que no se usan.
+    El CSV codifica NULL como campo vacío: las columnas que admiten NULL pasan por `NULLIF(@var, '')`.
+    """
+    if "tabla" in campos.columns and (campos["tabla"] == tabla).any():
+        campos = campos[campos["tabla"] == tabla]
+    ruta = ruta_csv or f"etl/salida/{tabla}.csv"
+    cols, sets = [], []
+    for _, c in campos.iterrows():
+        campo = c["campo"]
+        if str(c.get("generado", "")).strip():
+            cols.append(f"@omitir_{campo}")
+        elif str(c["nulo"]).strip().upper() == "NO":
+            cols.append(f"`{campo}`")
+        else:
+            cols.append(f"@{campo}")
+            sets.append(f"`{campo}` = NULLIF(@{campo}, '')")
+    cierre = ";" if not sets else "\nSET " + ",\n    ".join(sets) + ";"
+    return (f"LOAD DATA LOCAL INFILE '{_lit(ruta)}' INTO TABLE `{esquema}`.`{tabla}`\n"
+            f"CHARACTER SET utf8mb4 FIELDS TERMINATED BY ';' OPTIONALLY ENCLOSED BY '\"' "
+            f"LINES TERMINATED BY '{FIN_LINEA_CSV}'\nIGNORE 1 LINES\n(" + ", ".join(cols) + ")" + cierre)
 
 
 def descripcion_tabla(tablas: pd.DataFrame, esquema: str, tabla: str) -> str:
@@ -75,5 +105,20 @@ def escribir_sql(salida: Path = SALIDA) -> None:
     salida.write_text("\n\n".join(partes) + "\n", encoding="utf-8")
 
 
+def escribir_carga(salida: Path = SALIDA_CARGA) -> None:
+    """sql/load_data.sql: un LOAD DATA por tabla con datos (estado con_datos), tras create_tables.sql."""
+    tablas, campos = cargar_catalogo()
+    con_datos = tablas[(tablas["estado"] == "con_datos") & (tablas["tabla"] != "")]
+    partes = [f"-- Generado por etl/catalogo/sql.py el {date.today().isoformat()}. No editar a mano.\n"
+              "-- Ejecutar DESPUÉS de create_tables.sql, desde la raíz del proyecto y con local_infile activo\n"
+              "-- (servidor: SET GLOBAL local_infile = 1; cliente: mysql --local-infile=1).\n"
+              "-- anio, trimestre y mes son columnas generadas: se leen en @omitir_* y MySQL las calcula desde fecha."]
+    for _, t in con_datos.drop_duplicates(["esquema", "tabla"]).iterrows():
+        partes.append(load_data_sql(t["esquema"], t["tabla"], campos[campos["tabla"] == t["tabla"]]))
+    salida.parent.mkdir(parents=True, exist_ok=True)
+    salida.write_text("\n\n".join(partes) + "\n", encoding="utf-8")
+
+
 if __name__ == "__main__":
     escribir_sql()
+    escribir_carga()

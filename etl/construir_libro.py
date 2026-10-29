@@ -268,7 +268,7 @@ def construir_libro(origen: Path = Path("Data Dils.xlsx"), salida: Path = Path("
     _hoja_tablas(wb, tablas, campos, hojas, filas)
     _escribir(wb, "Campos", campos.rename(columns={
         "tabla": "TABLA", "campo": "Campo", "tipo_mysql": "Tipo MySQL", "nulo": "Nulo", "clave": "Clave",
-        "descripcion": "Descripción", "ejemplo": "Ejemplo"}), superior=True, ajustar={"Descripción"})
+        "descripcion": "Descripción", "ejemplo": "Ejemplo", "generado": "Generada como"}), superior=True, ajustar={"Descripción"})
     _escribir(wb, "Maestro Territorios", cargar_maestro(origen))
     if GLOSARIO.exists():
         glo = pd.read_csv(GLOSARIO, dtype=str, keep_default_na=False)
