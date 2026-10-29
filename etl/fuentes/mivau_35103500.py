@@ -11,8 +11,8 @@ Las columnas se localizan por el texto de las cabeceras, no por posición.
 La provincia aparece solo en la primera fila de cada grupo; las siguientes la heredan. En las hojas desde
 2020T1 el boletín añade municipios ordenados alfabéticamente DENTRO de su provincia pero antes de la fila
 que lleva la etiqueta (p. ej. "Almuñecar", de Granada, va tras Puente Génil y antes de la fila "Granada").
-Una fila sin etiqueta propia que no existe en la provincia heredada se busca en la siguiente etiqueta de la
-hoja; si tampoco está, el proceso falla. Cada caso así lanza un aviso y queda listado en la ficha.
+Esos siete casos conocidos están en `PROVINCIA_REAL`: su provincia real se impone siempre (con aviso). Cualquier
+otro municipio que no exista en su provincia heredada hace fallar el proceso, con la hoja y el nombre.
 Valores medios: `CUADRE = False`.
 """
 import re
@@ -35,6 +35,11 @@ MEDIDA = "valor_tasado_eur_m2"
 TASACIONES = "num_tasaciones"
 MEDIDAS = [MEDIDA, TASACIONES]
 CUADRE = False
+# Municipios que el boletín (desde 2020T1) coloca bajo la etiqueta de la provincia anterior: etiqueta del
+# boletín -> provincia real (nombre del maestro). Lista cerrada: un caso nuevo debe revisarse y añadirse aquí.
+PROVINCIA_REAL = {"Almuñecar": "Granada", "Azuqueca de Henares": "Guadalajara", "Illescas": "Toledo",
+                  "Ames": "La Coruña", "Cangas": "Pontevedra", "Almazora/Almassora": "Castellón/Castelló",
+                  "Benicarló": "Castellón/Castelló"}
 
 _RE_HOJA = re.compile(r"^T([1-4])A((?:19|20)\d{2})$")
 _ANTIGUEDAD = (("total", "TOTAL"), ("hasta cinco", "HASTA_5_ANOS"), ("con mas de cinco", "MAS_5_ANOS"))
@@ -104,20 +109,15 @@ def _hoja_a_filas(nombre: str, filas: list[list]) -> list[dict]:
         provincia = prov or provincia
         if provincia is None:
             raise ValueError(f"{DATASET_ID}: hoja {nombre!r}: municipio {mun!r} sin provincia")
-        municipios.append({"provincia": provincia, "propia": bool(prov), "municipio": mun, "fila": f})
-    siguiente = None
-    for m in reversed(municipios):  # etiqueta propia siguiente en la hoja, para las filas sin etiqueta
-        m["siguiente"] = siguiente
-        if m["propia"]:
-            siguiente = m["provincia"]
+        municipios.append({"provincia": provincia, "municipio": mun, "fila": f})
     out = []
     for m in municipios:
         celdas = {c: m["fila"][c] for c in cols}
         if all(_texto(v) == "" for v in celdas.values()):
             continue
         for ant in sorted({a for _, a in cols.values()}):
-            fila = {"anio": anio, "trimestre": trim, "provincia": m["provincia"], "propia": m["propia"],
-                    "siguiente": m["siguiente"], "municipio": m["municipio"], "antiguedad": ant}
+            fila = {"anio": anio, "trimestre": trim, "hoja": nombre, "provincia": m["provincia"],
+                    "municipio": m["municipio"], "antiguedad": ant}
             for c, (medida, a) in cols.items():
                 if a == ant:
                     fila[medida] = mivau.a_numero(celdas[c])
@@ -128,7 +128,7 @@ def _hoja_a_filas(nombre: str, filas: list[list]) -> list[dict]:
 
 
 def leer_municipios(path: Path) -> pd.DataFrame:
-    """Boletín → filas largas: anio, trimestre, provincia, propia, siguiente, municipio, antiguedad, medidas."""
+    """Boletín → filas largas: anio, trimestre, hoja, provincia, municipio, antiguedad, medidas."""
     wb = xlrd.open_workbook(str(path))
     filas = []
     for nombre in wb.sheet_names():
@@ -141,28 +141,25 @@ def leer_municipios(path: Path) -> pd.DataFrame:
     return df
 
 
-def _resolver(maestro: pd.DataFrame, provincia: str, propia: bool, siguiente: str | None, municipio: str):
-    """(territorio, provincia usada). Sin etiqueta propia y fuera de la provincia heredada, prueba la siguiente."""
+def _resolver(maestro: pd.DataFrame, provincia: str, municipio: str, hoja: str = "?"):
+    """(territorio, provincia usada). Los de PROVINCIA_REAL usan su provincia real; el resto, la heredada."""
+    real = PROVINCIA_REAL.get(municipio)
+    usada = real or provincia
     try:
-        return resolver_municipio(maestro, municipio, provincia), provincia
+        return resolver_municipio(maestro, municipio, usada), usada
     except TerritorioDesconocido as e:
-        if propia or not siguiente:
-            raise TerritorioDesconocido(f"{DATASET_ID}: {e}") from None
-        try:
-            return resolver_municipio(maestro, municipio, siguiente), siguiente
-        except TerritorioDesconocido:
-            raise TerritorioDesconocido(f"{DATASET_ID}: {e} (ni en la siguiente, {siguiente!r})") from None
+        raise TerritorioDesconocido(f"{DATASET_ID}, hoja {hoja.strip()!r}: {e}") from None
 
 
 def transformar(path: Path, fecha_descarga: date) -> pd.DataFrame:
     """Lee el boletín, resuelve cada municipio con su provincia y valida la tabla."""
     maestro = cargar_maestro(LIBRO)
     largo = leer_municipios(path)
-    claves = largo[["provincia", "propia", "siguiente", "municipio"]].drop_duplicates()
+    claves = largo[["provincia", "municipio", "hoja"]].drop_duplicates(["provincia", "municipio"])
     territorios, corregidos = {}, set()
     for k in claves.itertuples(index=False):
-        territorio, usada = _resolver(maestro, k.provincia, k.propia, k.siguiente, k.municipio)
-        territorios[(k.provincia, k.propia, k.siguiente, k.municipio)] = territorio
+        territorio, usada = _resolver(maestro, k.provincia, k.municipio, k.hoja)
+        territorios[(k.provincia, k.municipio)] = territorio
         if usada != k.provincia:
             corregidos.add(f"{k.municipio!r}: etiqueta heredada {k.provincia!r}, es de {usada!r}")
     if corregidos:
@@ -170,7 +167,7 @@ def transformar(path: Path, fecha_descarga: date) -> pd.DataFrame:
                       + "; ".join(sorted(corregidos)), stacklevel=2)
     filas = []
     for r in largo.itertuples(index=False):
-        t = territorios[(r.provincia, r.propia, r.siguiente, r.municipio)]
+        t = territorios[(r.provincia, r.municipio)]
         filas.append({**t, "antiguedad": r.antiguedad, **periodo_trimestral(int(r.anio), int(r.trimestre)),
                       MEDIDA: getattr(r, MEDIDA), TASACIONES: getattr(r, TASACIONES), "provisional": 0})
     return tabla_final(pd.DataFrame(filas), DATASET_ID, TABLA, DIMENSIONES, MEDIDA, maestro,

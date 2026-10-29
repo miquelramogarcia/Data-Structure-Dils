@@ -18,7 +18,7 @@ def resultado():
     with warnings.catch_warnings(record=True) as avisos:
         warnings.simplefilter("always")
         tabla = mu.transformar(FIXTURES / "35103500.xls", FECHA)
-    return tabla, [str(a.message) for a in avisos]
+    return tabla, [str(a.message) for a in avisos if str(a.message).startswith("MIVAU-35103500")]
 
 
 @pytest.fixture(scope="module")
@@ -91,18 +91,43 @@ def test_provincias_corregidas_exactas(resultado):
     assert f["nombre_provincia"] == "Granada"
 
 
-def test_municipio_desconocido_falla_con_su_nombre():
+def test_municipio_desconocido_falla_con_su_nombre_y_hoja():
     maestro = cargar_maestro(LIBRO)
     with pytest.raises(TerritorioDesconocido, match="Atlantis"):
-        mu._resolver(maestro, "Almería", True, None, "Atlantis")
+        mu._resolver(maestro, "Almería", "Atlantis", "T1A2005")
+    with pytest.raises(TerritorioDesconocido, match="T1A2005"):
+        mu._resolver(maestro, "Almería", "Atlantis", "T1A2005")
 
 
-def test_municipio_con_etiqueta_propia_no_se_busca_en_otra_provincia():
+def test_municipio_fuera_de_orden_no_listado_falla(monkeypatch):
+    # Illescas es de Toledo: bajo la etiqueta Guadalajara y SIN estar en PROVINCIA_REAL, falla
+    monkeypatch.delitem(mu.PROVINCIA_REAL, "Illescas")
     maestro = cargar_maestro(LIBRO)
     with pytest.raises(TerritorioDesconocido, match="Illescas"):
-        mu._resolver(maestro, "Guadalajara", True, "Toledo", "Illescas")  # etiqueta explícita: no se adivina
-    t, usada = mu._resolver(maestro, "Guadalajara", False, "Toledo", "Illescas")
+        mu._resolver(maestro, "Guadalajara", "Illescas", "T2A2026")
+    # otro municipio real de otra provincia, sintético: Motril (Granada) bajo Córdoba
+    with pytest.raises(TerritorioDesconocido, match="Motril"):
+        mu._resolver(maestro, "Córdoba", "Motril", "T2A2026")
+
+
+def test_lista_conocida_impone_la_provincia_real(monkeypatch):
+    maestro = cargar_maestro(LIBRO)
+    t, usada = mu._resolver(maestro, "Guadalajara", "Illescas")
     assert usada == "Toledo" and t["cod_territorio"] == "MU45081"
+    # aunque el nombre exista también en la provincia heredada (homónimo), manda la real
+    mun = maestro[(maestro["nivel"] == "Municipio") & (maestro["fuente_alias"] == "INE")]
+    rep = mun[mun["alias"].duplicated(keep=False)].sort_values("alias")
+    a, b = rep.iloc[0], rep.iloc[1]
+    assert a["alias"] == b["alias"] and a["cod_provincia"] != b["cod_provincia"]
+    monkeypatch.setitem(mu.PROVINCIA_REAL, a["nombre_municipio"], b["nombre_provincia"])
+    t, usada = mu._resolver(maestro, a["nombre_provincia"], a["nombre_municipio"])
+    assert usada == b["nombre_provincia"] and t["cod_territorio"] == b["cod_territorio"]
+
+
+def test_lista_de_correcciones_exacta():
+    assert mu.PROVINCIA_REAL == {
+        "Almuñecar": "Granada", "Azuqueca de Henares": "Guadalajara", "Illescas": "Toledo", "Ames": "La Coruña",
+        "Cangas": "Pontevedra", "Almazora/Almassora": "Castellón/Castelló", "Benicarló": "Castellón/Castelló"}
 
 
 def test_tabla_valida(tabla):
