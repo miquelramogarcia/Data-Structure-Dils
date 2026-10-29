@@ -151,3 +151,41 @@ mivau_valor_tasado_municipios_25000,valor_tasado_eur_m2,"DECIMAL(12,2)",SÍ,,"Va
 mivau_valor_tasado_municipios_25000,num_tasaciones,INT UNSIGNED,SÍ,,"Número de tasaciones en que se basa el valor tasado medio de la fila (municipio, trimestre y antigüedad). NULL si la celda está en blanco",552
 mivau_valor_tasado_municipios_25000,provisional,TINYINT(1),NO,,"1 = dato provisional, 0 = definitivo. El boletín 35103500 no marca ningún dato como provisional: siempre 0",0
 mivau_valor_tasado_municipios_25000,fecha_descarga,DATE,NO,,Día en que se descargó el dato de la fuente,
+mivau_precio_suelo_urbano,id_registro,VARCHAR(64),NO,PRIMARY KEY,Clave natural: cod_territorio + '_' + periodo. Igual en cada descarga: sirve para el UPSERT (longitud máx. actual: 11),PR04_2026T2
+mivau_precio_suelo_urbano,nivel,"ENUM('Nacional','CCAA','Provincia','Municipio')",NO,INDEX,Nivel territorial del dato,Provincia
+mivau_precio_suelo_urbano,cod_territorio,VARCHAR(8),NO,INDEX,Código territorial único (ES / CAxx / PRxx / MUxxxxx),PR04
+mivau_precio_suelo_urbano,cod_ccaa,CHAR(2),NO,INDEX,Código INE de comunidad autónoma (00 = Nacional),01
+mivau_precio_suelo_urbano,nombre_ccaa,VARCHAR(100),NO,,Nombre oficial INE de la comunidad autónoma (según maestro BD_Territorios),Andalucía
+mivau_precio_suelo_urbano,cod_provincia,CHAR(2),SÍ,INDEX,Código INE de provincia (NULL en filas Nacional/CCAA),04
+mivau_precio_suelo_urbano,nombre_provincia,VARCHAR(100),SÍ,,Nombre oficial INE de la provincia (NULL en filas Nacional/CCAA),Almería
+mivau_precio_suelo_urbano,cod_municipio,CHAR(5),SÍ,INDEX,Código INE de municipio (NULL: la fuente no trae nivel municipal),
+mivau_precio_suelo_urbano,nombre_municipio,VARCHAR(100),SÍ,,Nombre oficial INE del municipio (NULL: la fuente no trae nivel municipal),
+mivau_precio_suelo_urbano,periodo,VARCHAR(7),NO,,Periodo normalizado: AAAAMmm / AAAATn / AAAA,2026T2
+mivau_precio_suelo_urbano,frecuencia,CHAR(1),NO,,"M = mensual, T = trimestral, A = anual",T
+mivau_precio_suelo_urbano,anio,SMALLINT UNSIGNED,NO,,Año del periodo,2026
+mivau_precio_suelo_urbano,trimestre,TINYINT UNSIGNED,SÍ,,Trimestre (1-4); NULL en mensual y anual,2
+mivau_precio_suelo_urbano,mes,TINYINT UNSIGNED,SÍ,,Mes (1-12); NULL en trimestral y anual,
+mivau_precio_suelo_urbano,fecha,DATE,NO,INDEX,Primer día del periodo,2026-04-01
+mivau_precio_suelo_urbano,precio_eur_m2,"DECIMAL(12,2)",SÍ,,"Precio medio del metro cuadrado de suelo urbano (unidad: euros/m²) en el trimestre, para el territorio de la fila. Es una media: no se suma entre territorios ni periodos. NULL si la fuente publica 'n.s.' (sin dato suficiente), '.' o deja la celda en blanco",215.09
+mivau_precio_suelo_urbano,provisional,TINYINT(1),NO,,"1 = dato provisional, 0 = definitivo. La fuente no marca ningún trimestre como provisional: siempre 0",0
+mivau_precio_suelo_urbano,fecha_descarga,DATE,NO,,Día en que se descargó el dato de la fuente,
+mivau_indice_costes_construccion,id_registro,VARCHAR(64),NO,PRIMARY KEY,Clave natural: cod_territorio + '_' + componente + '_' + base + '_' + periodo. Igual en cada descarga: sirve para el UPSERT,ES_TOTAL_2015_2024M01
+mivau_indice_costes_construccion,nivel,"ENUM('Nacional','CCAA','Provincia','Municipio')",NO,INDEX,Nivel territorial del dato,Nacional
+mivau_indice_costes_construccion,cod_territorio,VARCHAR(8),NO,INDEX,Código territorial único (ES / CAxx / PRxx / MUxxxxx),ES
+mivau_indice_costes_construccion,cod_ccaa,CHAR(2),NO,INDEX,Código INE de comunidad autónoma (00 = Nacional),00
+mivau_indice_costes_construccion,nombre_ccaa,VARCHAR(100),NO,,Nombre oficial INE de la comunidad autónoma (según maestro BD_Territorios),Nacional
+mivau_indice_costes_construccion,cod_provincia,CHAR(2),SÍ,INDEX,Código INE de provincia (NULL: el índice es nacional),
+mivau_indice_costes_construccion,nombre_provincia,VARCHAR(100),SÍ,,Nombre oficial INE de la provincia (NULL: el índice es nacional),
+mivau_indice_costes_construccion,cod_municipio,CHAR(5),SÍ,INDEX,Código INE de municipio (NULL: la fuente no trae nivel municipal),
+mivau_indice_costes_construccion,nombre_municipio,VARCHAR(100),SÍ,,Nombre oficial INE del municipio (NULL: la fuente no trae nivel municipal),
+mivau_indice_costes_construccion,componente,VARCHAR(30),NO,INDEX,"Pendiente: la fuente no publica los nombres de las 13 columnas del archivo 57010000 (los títulos de columna son imágenes que no están en el XLS); pendiente de confirmar con el MIVAU / el usuario. Código previsto: texto en MAYÚSCULAS con guion bajo (p. ej. TOTAL, MANO_OBRA)",TOTAL
+mivau_indice_costes_construccion,base,VARCHAR(4),NO,INDEX,Año base del índice (enero de ese año = 100). Cada base es una serie distinta que no se enlaza con las demás; el archivo 57010000 solo trae la base 2015,2015
+mivau_indice_costes_construccion,periodo,VARCHAR(7),NO,,Periodo normalizado: AAAAMmm / AAAATn / AAAA,2024M01
+mivau_indice_costes_construccion,frecuencia,CHAR(1),NO,,"M = mensual, T = trimestral, A = anual",M
+mivau_indice_costes_construccion,anio,SMALLINT UNSIGNED,NO,,Año del periodo,2024
+mivau_indice_costes_construccion,trimestre,TINYINT UNSIGNED,SÍ,,Trimestre (1-4); NULL en mensual y anual,
+mivau_indice_costes_construccion,mes,TINYINT UNSIGNED,SÍ,,Mes (1-12); NULL en trimestral y anual,1
+mivau_indice_costes_construccion,fecha,DATE,NO,INDEX,Primer día del periodo,2024-01-01
+mivau_indice_costes_construccion,indice,"DECIMAL(10,4)",SÍ,,"Índice de costes del sector de la construcción (base indicada en `base`, enero de la base = 100; número índice sin unidad) en el mes, para el componente de la fila. No se suma ni se promedia entre componentes. NULL si la fuente no publica el dato",127.3926
+mivau_indice_costes_construccion,provisional,TINYINT(1),NO,,"1 = dato provisional, 0 = definitivo. Pendiente de confirmar: el archivo no marca provisionales",0
+mivau_indice_costes_construccion,fecha_descarga,DATE,NO,,Día en que se descargó el dato de la fuente,
