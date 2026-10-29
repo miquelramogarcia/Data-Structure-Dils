@@ -47,10 +47,12 @@ def _clave_texto(txt: str) -> str:
 def tabla_final(df: pd.DataFrame, dataset_id: str, tabla: str, dimensiones: list[str], medida: str,
                 maestro: pd.DataFrame, fecha_descarga: date, entero: bool = True,
                 descriptivas: list[str] | None = None,
-                medidas_enteras: list[str] | None = None) -> pd.DataFrame:
+                medidas_enteras: list[str] | None = None,
+                medidas_decimales: list[str] | None = None) -> pd.DataFrame:
     """Filas con territorio + dimensiones + periodo + medida + provisional → tabla validada.
 
     `medidas_enteras`: medidas adicionales (recuentos) que van tras `medida`, como Int64.
+    `medidas_decimales`: medidas adicionales no enteras (superficies, importes) que van tras las enteras, como float.
 
     expandir_uniprovinciales → construir_tabla → validar. `df` lleva ya las columnas del territorio, las
     dimensiones, las del periodo, `medida` (float o Int64) y `provisional`.
@@ -64,7 +66,10 @@ def tabla_final(df: pd.DataFrame, dataset_id: str, tabla: str, dimensiones: list
     extras = list(medidas_enteras or [])
     for m in extras:
         df[m] = df[m].round().astype("Int64")
-    resultado = construir_tabla(df, list(dimensiones), [medida, *extras], fecha_descarga, descriptivas)
+    decimales = list(medidas_decimales or [])
+    for m in decimales:
+        df[m] = pd.to_numeric(df[m], errors="coerce").astype("float64")
+    resultado = construir_tabla(df, list(dimensiones), [medida, *extras, *decimales], fecha_descarga, descriptivas)
     try:
         validar_o_fallar(resultado, tabla, maestro)
     except ValueError as e:
@@ -107,3 +112,41 @@ def matriz_a_tabla(path: Path, dataset_id: str, tabla: str, dimensiones: dict[st
     """Matriz de territorios del MIVAU (mensual o trimestral) → tabla validada (`matriz_a_filas` + `tabla_final`)."""
     filas = matriz_a_filas(path, dataset_id, dimensiones, medida, maestro, frecuencia, omitir)
     return tabla_final(filas, dataset_id, tabla, list(dimensiones), medida, maestro, fecha_descarga, entero)
+
+
+def serie_vertical_a_tabla(path: Path, dataset_id: str, tabla: str, dimension: str,
+                           columnas: dict[int, tuple[str, str]], maestro: pd.DataFrame, fecha_descarga: date,
+                           decimales: dict[str, int] | None = None) -> pd.DataFrame:
+    """Serie mensual con periodos en filas y columnas sin rótulo (09010600, 09011600) → tabla validada.
+
+    `columnas`: índice de columna de valores (0 = primera) -> (valor de `dimension`, nombre de la medida). El
+    significado de las columnas lo da una imagen incrustada en el .xls, no texto: por eso el mapa es explícito
+    y cualquier columna con datos que no esté en él hace fallar el proceso (la fuente habría cambiado de forma).
+    La primera medida (por orden de aparición en `columnas`) es el recuento entero; las demás son decimales,
+    redondeadas a `decimales[medida]` cifras (por defecto 4, como el DECIMAL del catálogo). Cada fila de la
+    tabla es una (territorio, valor de la dimensión, mes) con todas las medidas que le correspondan.
+    """
+    decimales = decimales or {}
+    largo = mivau.leer_serie_vertical(path)
+    medidas = list(dict.fromkeys(m for _, m in columnas.values()))
+    sobrantes = largo[~largo["columna"].isin(columnas) & largo["valor_txt"].astype(str).str.strip().ne("")]
+    if len(sobrantes):
+        cols = sorted(sobrantes["columna"].unique().tolist())
+        raise ValueError(f"{dataset_id}: columna {cols[0]} con datos sin significado conocido (mapeadas: "
+                         f"{sorted(columnas)}); la estructura del archivo ha cambiado")
+    territorios = {t: resolver(maestro, t) for t in largo["territorio_txt"].unique()}
+    filas: dict[tuple, dict] = {}
+    for r in largo[largo["columna"].isin(columnas)].itertuples(index=False):
+        valor_dim, medida = columnas[r.columna]
+        clave = (r.territorio_txt, valor_dim, int(r.anio), int(r.mes))
+        fila = filas.setdefault(clave, {**territorios[r.territorio_txt], dimension: valor_dim,
+                                        **periodo_mensual(int(r.anio), int(r.mes)), "provisional": 0})
+        valor = mivau.a_numero(r.valor_txt)
+        fila[medida] = None if valor is None else (round(valor, decimales.get(medida, 4)) if medida != medidas[0]
+                                                   else valor)
+    df = pd.DataFrame(list(filas.values()))
+    for m in medidas:
+        if m not in df.columns:
+            df[m] = None
+    return tabla_final(df, dataset_id, tabla, [dimension], medidas[0], maestro, fecha_descarga,
+                       medidas_decimales=medidas[1:])

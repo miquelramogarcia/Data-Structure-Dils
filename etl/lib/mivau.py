@@ -338,3 +338,81 @@ def leer_hojas_trimestre(path: Path) -> pd.DataFrame:
         filas += _parsear_hoja_trimestre(hoja.name.strip(), matriz)
     return pd.DataFrame(filas, columns=["hoja", "anio", "trimestre", "territorio_txt", "columna_txt",
                                         "valor_txt", "provisional"])
+
+
+def _parsear_serie_vertical(nombre: str, filas: list[list]) -> list[dict]:
+    """Hoja con los periodos en filas y el desglose en columnas SIN cabecera de texto (boletines 09010600 y 09011600).
+
+    Layout: una línea con solo el nombre del territorio ("TOTAL NACIONAL"); debajo, filas anuales (año sin
+    mes) y bloques mensuales (el año solo aparece en la primera fila del bloque, los meses siguen en filas
+    sucesivas). La columna de los meses es la que tiene >= 2 meses ("Ene", "Feb"...); la del año es la
+    columna con más años a su izquierda; los valores empiezan en la columna siguiente a la de los meses.
+    Las filas anuales se ignoran (son suma o media de los meses). Los rótulos de las columnas de valores
+    son una imagen incrustada en el .xls, no texto: se devuelve el índice de columna (0 = primera columna
+    de valores) y quien llama lo asocia a su significado. Se emiten TODAS las columnas hasta la última de
+    la hoja (celda en blanco → valor_txt ""), para que quien llama pueda comprobar las no mapeadas.
+    Un pie ("Fuente...") corta la hoja. Devuelve filas largas: hoja, territorio_txt, anio, mes, columna, valor_txt.
+    """
+    def es_mes(c) -> bool:
+        if not (isinstance(c, str) and c.strip()):
+            return False
+        try:
+            return subperiodo(c)[0] == "M"
+        except ValueError:
+            return False
+
+    ancho = max(len(f) for f in filas)
+    por_columna = [sum(es_mes(f[c]) for f in filas if c < len(f)) for c in range(ancho)]
+    col_mes = max(range(ancho), key=lambda c: por_columna[c])
+    if por_columna[col_mes] < 2:
+        raise ValueError(f"Hoja {nombre!r}: no se encuentra la columna de meses (serie mensual)")
+    anios_por_col = {c: sum(_anio_de(f[c]) is not None and isinstance(f[c], float) for f in filas) for c in range(col_mes)}
+    col_anio = max(anios_por_col, key=anios_por_col.get) if anios_por_col else None
+    if col_anio is None or anios_por_col[col_anio] < 1:
+        raise ValueError(f"Hoja {nombre!r}: no se encuentra la columna de años a la izquierda de los meses")
+    primera = col_mes + 1
+    candidato, territorio, anio, out = None, None, None, []
+    for fila in filas:
+        textos = [str(c).strip() for c in fila if isinstance(c, str) and c.strip()]
+        if textos and _es_pie(textos[0]):
+            break
+        valores = fila[primera:]
+        if all(_en_blanco(v) for v in valores):
+            if len(textos) == 1 and not es_mes(fila[col_mes]):
+                if territorio is None:
+                    candidato = textos[0]
+                else:  # nuevo bloque de territorio tras los datos
+                    candidato, territorio, anio = textos[0], None, None
+            continue
+        if territorio is None:
+            if candidato is None:
+                raise ValueError(f"Hoja {nombre!r}: datos sin nombre de territorio encima")
+            territorio = candidato
+        celda_anio = fila[col_anio]
+        if es_mes(fila[col_mes]):
+            if isinstance(celda_anio, float):
+                anio = _anio_de(celda_anio)
+            if anio is None:
+                raise ValueError(f"Hoja {nombre!r}: mes sin año en {fila[col_mes]!r}")
+            mes = subperiodo(fila[col_mes])[1]
+            out += [{"hoja": nombre, "territorio_txt": territorio, "anio": anio, "mes": mes, "columna": i,
+                     "valor_txt": "" if _en_blanco(v) else _texto_valor(v)} for i, v in enumerate(valores)]
+        elif not isinstance(celda_anio, float):
+            raise ValueError(f"Hoja {nombre!r}: fila con datos que no es mensual ni anual: {fila[:primera + 2]}")
+    if not out:
+        raise ValueError(f"Hoja {nombre!r}: no hay filas mensuales (serie mensual)")
+    return out
+
+
+def leer_serie_vertical(path: Path) -> pd.DataFrame:
+    """Lee un boletín MIVAU de una hoja con periodos en filas y columnas sin rótulo (09010600, 09011600).
+
+    Formato largo: hoja, territorio_txt, anio, mes, columna, valor_txt (solo filas mensuales; ver
+    `_parsear_serie_vertical`). Todas las hojas deben tener la estructura.
+    """
+    wb = xlrd.open_workbook(str(path))
+    filas = []
+    for hoja in wb.sheets():
+        matriz = [[hoja.cell_value(r, c) for c in range(hoja.ncols)] for r in range(hoja.nrows)]
+        filas += _parsear_serie_vertical(hoja.name.strip(), matriz)
+    return pd.DataFrame(filas, columns=["hoja", "territorio_txt", "anio", "mes", "columna", "valor_txt"])

@@ -189,3 +189,43 @@ mivau_indice_costes_construccion,fecha,DATE,NO,INDEX,Primer día del periodo,202
 mivau_indice_costes_construccion,indice,"DECIMAL(10,4)",SÍ,,"Índice de costes del sector de la construcción (base indicada en `base`, enero de la base = 100; número índice sin unidad) en el mes, para el componente de la fila. No se suma ni se promedia entre componentes. NULL si la fuente no publica el dato",127.3926
 mivau_indice_costes_construccion,provisional,TINYINT(1),NO,,"1 = dato provisional, 0 = definitivo. Pendiente de confirmar: el archivo no marca provisionales",0
 mivau_indice_costes_construccion,fecha_descarga,DATE,NO,,Día en que se descargó el dato de la fuente,
+mivau_certificados_fin_obra,id_registro,VARCHAR(64),NO,PRIMARY KEY,Clave natural: cod_territorio + '_' + promotor + '_' + periodo. Igual en cada descarga: sirve para el UPSERT (longitud máx. actual: 36),ES_PRIVADO_PERSONAS_FISICAS_2026M06
+mivau_certificados_fin_obra,nivel,"ENUM('Nacional','CCAA','Provincia','Municipio')",NO,INDEX,Nivel territorial del dato,Nacional
+mivau_certificados_fin_obra,cod_territorio,VARCHAR(8),NO,INDEX,Código territorial único (ES / CAxx / PRxx / MUxxxxx),ES
+mivau_certificados_fin_obra,cod_ccaa,CHAR(2),NO,INDEX,Código INE de comunidad autónoma (00 = Nacional),00
+mivau_certificados_fin_obra,nombre_ccaa,VARCHAR(100),NO,,Nombre oficial INE de la comunidad autónoma (según maestro BD_Territorios),Total Nacional
+mivau_certificados_fin_obra,cod_provincia,CHAR(2),SÍ,INDEX,Código INE de provincia (NULL en filas Nacional/CCAA),
+mivau_certificados_fin_obra,nombre_provincia,VARCHAR(100),SÍ,,Nombre oficial INE de la provincia (NULL en filas Nacional/CCAA),
+mivau_certificados_fin_obra,cod_municipio,CHAR(5),SÍ,INDEX,Código INE de municipio (NULL: la fuente no trae nivel municipal),
+mivau_certificados_fin_obra,nombre_municipio,VARCHAR(100),SÍ,,Nombre oficial INE del municipio (NULL: la fuente no trae nivel municipal),
+mivau_certificados_fin_obra,promotor,VARCHAR(30),NO,INDEX,Tipo de promotor de las obras terminadas: TOTAL = todos los promotores; PRIVADO_TOTAL = promotor privado (suma de los cuatro siguientes); PRIVADO_PERSONAS_FISICAS = personas físicas y comunidades de propietarios; PRIVADO_SOCIEDADES = sociedades mercantiles; PRIVADO_COOPERATIVAS = cooperativas; PRIVADO_OTROS = otros promotores privados; ADMINISTRACIONES_PUBLICAS = administraciones públicas. TOTAL = PRIVADO_TOTAL + ADMINISTRACIONES_PUBLICAS,PRIVADO_SOCIEDADES
+mivau_certificados_fin_obra,periodo,VARCHAR(7),NO,,Periodo normalizado: AAAAMmm / AAAATn / AAAA,2026M06
+mivau_certificados_fin_obra,frecuencia,CHAR(1),NO,,"M = mensual, T = trimestral, A = anual",M
+mivau_certificados_fin_obra,anio,SMALLINT UNSIGNED,NO,,Año del periodo,2026
+mivau_certificados_fin_obra,trimestre,TINYINT UNSIGNED,SÍ,,Trimestre (1-4); NULL en mensual y anual,
+mivau_certificados_fin_obra,mes,TINYINT UNSIGNED,SÍ,,Mes (1-12); NULL en trimestral y anual,6
+mivau_certificados_fin_obra,fecha,DATE,NO,INDEX,Primer día del periodo,2026-06-01
+mivau_certificados_fin_obra,num_viviendas,INT UNSIGNED,SÍ,,Número de viviendas con certificado de fin de obra en el mes (unidad: vivienda; uso residencial) según el promotor de la fila. NULL si la fuente no publica el dato,28270
+mivau_certificados_fin_obra,valor_liquidacion_miles_eur,"DECIMAL(14,1)",SÍ,,"Valor de liquidación de la ejecución material de las obras con certificado de fin de obra en el mes (unidad: miles de euros; la fuente lo da para uso residencial y no residencial, solo para el total de promotores). NULL en las filas de promotor distinto de TOTAL",3087215.8
+mivau_certificados_fin_obra,provisional,TINYINT(1),NO,,"1 = dato provisional, 0 = definitivo. La fuente no marca ningún mes como provisional: siempre 0",0
+mivau_certificados_fin_obra,fecha_descarga,DATE,NO,,Día en que se descargó el dato de la fuente,
+mivau_visados_direccion_obra,id_registro,VARCHAR(64),NO,PRIMARY KEY,Clave natural: cod_territorio + '_' + tipo_obra + '_' + periodo. Igual en cada descarga: sirve para el UPSERT (longitud máx. actual: 37),ES_OBRA_NUEVA_OTROS_EDIFICIOS_2026M06
+mivau_visados_direccion_obra,nivel,"ENUM('Nacional','CCAA','Provincia','Municipio')",NO,INDEX,Nivel territorial del dato,Nacional
+mivau_visados_direccion_obra,cod_territorio,VARCHAR(8),NO,INDEX,Código territorial único (ES / CAxx / PRxx / MUxxxxx),ES
+mivau_visados_direccion_obra,cod_ccaa,CHAR(2),NO,INDEX,Código INE de comunidad autónoma (00 = Nacional),00
+mivau_visados_direccion_obra,nombre_ccaa,VARCHAR(100),NO,,Nombre oficial INE de la comunidad autónoma (según maestro BD_Territorios),Total Nacional
+mivau_visados_direccion_obra,cod_provincia,CHAR(2),SÍ,INDEX,Código INE de provincia (NULL en filas Nacional/CCAA),
+mivau_visados_direccion_obra,nombre_provincia,VARCHAR(100),SÍ,,Nombre oficial INE de la provincia (NULL en filas Nacional/CCAA),
+mivau_visados_direccion_obra,cod_municipio,CHAR(5),SÍ,INDEX,Código INE de municipio (NULL: la fuente no trae nivel municipal),
+mivau_visados_direccion_obra,nombre_municipio,VARCHAR(100),SÍ,,Nombre oficial INE del municipio (NULL: la fuente no trae nivel municipal),
+mivau_visados_direccion_obra,tipo_obra,VARCHAR(30),NO,INDEX,"Tipo de obra del visado de dirección de obra: TOTAL = obra nueva + ampliación + reforma; OBRA_NUEVA = obra nueva (suma de los tres siguientes); OBRA_NUEVA_UNIFAMILIAR = en edificios de viviendas familiares, unifamiliar; OBRA_NUEVA_EN_BLOQUE = en edificios de viviendas familiares, en bloque; OBRA_NUEVA_OTROS_EDIFICIOS = en otros edificios; AMPLIACION = a ampliar; REFORMA_RESTAURACION = a reformar y/o restaurar",OBRA_NUEVA_EN_BLOQUE
+mivau_visados_direccion_obra,periodo,VARCHAR(7),NO,,Periodo normalizado: AAAAMmm / AAAATn / AAAA,2026M06
+mivau_visados_direccion_obra,frecuencia,CHAR(1),NO,,"M = mensual, T = trimestral, A = anual",M
+mivau_visados_direccion_obra,anio,SMALLINT UNSIGNED,NO,,Año del periodo,2026
+mivau_visados_direccion_obra,trimestre,TINYINT UNSIGNED,SÍ,,Trimestre (1-4); NULL en mensual y anual,
+mivau_visados_direccion_obra,mes,TINYINT UNSIGNED,SÍ,,Mes (1-12); NULL en trimestral y anual,6
+mivau_visados_direccion_obra,fecha,DATE,NO,INDEX,Primer día del periodo,2026-06-01
+mivau_visados_direccion_obra,num_viviendas,INT UNSIGNED,SÍ,,Número de viviendas con visado de dirección de obra en el mes (unidad: vivienda) según el tipo de obra de la fila,12130
+mivau_visados_direccion_obra,superficie_media_m2,"DECIMAL(10,4)",SÍ,,"Superficie media por vivienda de los visados del mes (unidad: m2), solo para OBRA_NUEVA_UNIFAMILIAR, OBRA_NUEVA_EN_BLOQUE, OBRA_NUEVA_OTROS_EDIFICIOS y AMPLIACION (la fuente no la publica para TOTAL, OBRA_NUEVA ni REFORMA_RESTAURACION). Es una media: no se suma. NULL si la fuente publica '-' (mes sin viviendas de ese tipo) o no la publica",97.9338
+mivau_visados_direccion_obra,provisional,TINYINT(1),NO,,"1 = dato provisional, 0 = definitivo. La fuente no marca ningún mes como provisional: siempre 0",0
+mivau_visados_direccion_obra,fecha_descarga,DATE,NO,,Día en que se descargó el dato de la fuente,

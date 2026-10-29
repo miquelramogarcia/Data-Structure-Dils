@@ -193,3 +193,55 @@ def test_leer_cruzada_real():
     assert a_numero(f.iloc[0].valor_txt) == 10708
     prov = df[df.provisional][["anio", "trimestre"]].drop_duplicates().values.tolist()
     assert sorted(prov) == [[2025, 3], [2026, 2]]
+
+
+# --- serie vertical (boletines 09010600 y 09011600): periodos en filas, desglose en columnas sin cabecera ---
+
+def _hoja_vertical(pie="Fuente: M. Transportes"):
+    return [["", "", "", "", "", ""],
+            ["", "TITULO DE LA TABLA", "", "", "", ""],
+            ["", "TOTAL NACIONAL", "", "", "", ""],
+            ["", "", "", "", "", ""],
+            ["", 2025.0, "", "", 100.0, 60.0],      # total anual: se ignora
+            ["", "", "", "", "", ""],
+            ["", 2026.0, "", "Feb", 30.0, "-"],
+            ["", "", "", "Ene", 20.0, 10.0],
+            ["", 2025.0, "", "Dic", 0.0, ""],
+            ["", "", "", "Nov", 5.0, 4.0],
+            ["", pie, "", "", "", ""]]
+
+
+def test_serie_vertical_sintetica():
+    df = pd.DataFrame(mivau._parsear_serie_vertical("h", _hoja_vertical()))
+    assert list(df.columns) == ["hoja", "territorio_txt", "anio", "mes", "columna", "valor_txt"]
+    assert set(df.territorio_txt) == {"TOTAL NACIONAL"}
+    assert sorted(set(zip(df.anio, df.mes))) == [(2025, 11), (2025, 12), (2026, 1), (2026, 2)]  # sin la fila anual
+    v = {(r.anio, r.mes, r.columna): r.valor_txt for r in df.itertuples()}
+    assert v[(2026, 2, 0)] == "30" and v[(2026, 2, 1)] == "-"
+    assert v[(2025, 12, 0)] == "0" and v[(2025, 12, 1)] == ""   # 0 literal se conserva; en blanco = ""
+    assert len(df) == 8
+
+
+def test_serie_vertical_varios_territorios():
+    filas = _hoja_vertical()[:10] + [["", "CATALUÑA", "", "", "", ""],
+                                     ["", 2026.0, "", "Ene", 7.0, 3.0],
+                                     ["", "Fuente: x", "", "", "", ""]]
+    df = pd.DataFrame(mivau._parsear_serie_vertical("h", filas))
+    assert df[df.territorio_txt == "CATALUÑA"].valor_txt.tolist() == ["7", "3"]
+    assert len(df[df.territorio_txt == "TOTAL NACIONAL"]) == 8
+
+
+def test_serie_vertical_errores():
+    with pytest.raises(ValueError, match="mensual"):
+        mivau._parsear_serie_vertical("h", [["", "TOTAL NACIONAL", ""], ["", 2025.0, 5.0]])
+    sin_terr = [f for f in _hoja_vertical() if f[1] not in ("TOTAL NACIONAL", "TITULO DE LA TABLA")]
+    with pytest.raises(ValueError, match="territorio"):
+        mivau._parsear_serie_vertical("h", sin_terr)
+
+
+def test_leer_serie_vertical_real():
+    for fichero, primero in (("09011600.xls", 88254.0), ("09010600.xls", 166426.0)):
+        df = mivau.leer_serie_vertical(Path(__file__).parent / "fixtures" / fichero)
+        assert df.territorio_txt.unique().tolist() == ["TOTAL NACIONAL"]
+        assert df.anio.min() == 1991 and (df.anio.max(), df[df.anio == 2026].mes.max()) == (2026, 6)
+        assert not ((df.anio == 2025) & df.mes.isna()).any()

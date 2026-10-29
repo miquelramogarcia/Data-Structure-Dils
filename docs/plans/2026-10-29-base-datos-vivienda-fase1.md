@@ -302,3 +302,62 @@ Si el archivo no tiene la estructura prevista, se decide en la propia tarea (una
   - `test_libro_sin_errores`: ninguna celda de `Data Dils_v2.xlsx` empieza por `#`, salvo en texto descriptivo.
 - [ ] **Paso 3:** ejecutar `python -m etl.ejecutar_todo` completo y luego `pytest -v`. Esperado: todo PASS. Pegar en el README el resumen de filas por tabla.
 - [ ] **Paso 4:** commit `docs: glosario, README final y verificación global`.
+
+---
+
+## Tareas añadidas el 2026-10-29 como PROTOTIPO
+
+Las pidió el usuario a partir de su lista de pendientes. Su respuesta literal: "La 17 y 18 hazlas pero como prototipo porq hay q decidir aun".
+
+Reglas que valen para las dos:
+- Todo lo que generen vive aparte, en `prototipos/` (código, SQL y documentación) y en hojas con el sufijo `(prototipo)` dentro del libro.
+- No se modifica el SQL de producción (`sql/create_tables.sql`), ni las tablas ya diseñadas, ni el catálogo. Así se puede adoptar o tirar sin tocar nada de lo anterior.
+- Cada prototipo deja un `prototipos/<tema>/DECISIONES_PENDIENTES.md` con las preguntas que el usuario tiene que responder para pasarlo a producción.
+
+### Tarea 17 (prototipo): maestros como tablas MySQL y relaciones
+
+**Archivos:**
+- Crear: `prototipos/maestros/generar.py`, `prototipos/maestros/maestros.sql`, `prototipos/maestros/datos/*.csv`, `prototipos/maestros/DECISIONES_PENDIENTES.md`, `tests/test_prototipo_maestros.py`
+
+- [ ] **Paso 1:** en el esquema `MAESTROS`, generar el DDL y los datos de estas tablas:
+  - `dim_territorio`: territorios de `cargar_maestro()`, uno por `cod_territorio`; los alias van aparte.
+  - `dim_territorio_alias`: alias, nivel, cod_territorio y fuente.
+  - `dim_periodo`: todos los periodos M/T/A entre 2004 y 2030, con `periodo` como PK, `frecuencia`, `anio`, `trimestre`, `mes`, `fecha`, `fecha_fin` y `periodo_padre` (el mes apunta a su trimestre y el trimestre a su año).
+  - `dim_categoria`: `dimension`, `codigo` y `descripcion`, con los valores de las dimensiones propias que usan las tablas con datos.
+- [ ] **Paso 2:** generar `ALTER TABLE ... ADD CONSTRAINT ... FOREIGN KEY` desde cada tabla con datos hacia `dim_territorio(cod_territorio)` y `dim_periodo(periodo)`, en un archivo aparte `maestros_fk.sql`. Las relaciones con `dim_categoria` se documentan pero no se crean, porque una FK compuesta de `dimension` + `codigo` no encaja con el diseño actual. Esa es una de las preguntas pendientes.
+- [ ] **Paso 3:** tests.
+  - Todos los `cod_territorio` de `etl/salida/*.csv` existen en `dim_territorio`.
+  - Todos los `periodo` existen en `dim_periodo`.
+  - No hay PK duplicadas en ninguna dimensión.
+- [ ] **Paso 4:** `DECISIONES_PENDIENTES.md`, como mínimo con estas preguntas:
+  - ¿FK reales o solo documentadas (en las cargas masivas las FK ralentizan y obligan a respetar un orden)?
+  - ¿Esquema `MAESTROS` aparte o dentro de cada esquema?
+  - ¿Se incluyen secciones censales y distritos (necesarios para SERPAVI e Idealista)?
+  - ¿Cada tabla de categoría por separado o una `dim_categoria` genérica?
+  - ¿Códigos INE de municipio versionados por año?
+- [ ] **Paso 5:** el libro añade una hoja `Maestros (prototipo)` con el DDL. Commit `feat(prototipo): maestros MySQL y relaciones`.
+
+### Tarea 18 (prototipo): mapeo origen → destino y linaje / control de cargas
+
+**Archivos:**
+- Crear: `prototipos/linaje/generar.py`, `prototipos/linaje/mapeo.csv`, `prototipos/linaje/control_cargas.sql`, `prototipos/linaje/DECISIONES_PENDIENTES.md`, `tests/test_prototipo_linaje.py`
+
+- [ ] **Paso 1:** `mapeo.csv`, con una fila por tabla destino y columna destino.
+  - Columnas: `tabla, columna_destino, dataset_id, archivo_origen, hoja_origen, ubicacion_origen, transformacion, regla`.
+  - Ejemplos de `ubicacion_origen`: "columna B, filas de territorio" o "cabecera fila 11".
+  - Ejemplos de `transformacion`: "resolver(maestro) → cod_territorio" o "periodo_mensual(año, mes)".
+  - Se genera a partir de los módulos de `etl/fuentes/` y de las fichas. Lo que no se pueda deducir automáticamente se rellena a mano para las tablas con datos.
+- [ ] **Paso 2:** `control_cargas.sql`, con el DDL de `META.control_cargas`:
+  - `id_carga` como PK autoincremental;
+  - `dataset_id`, `tabla`, `url`, `archivo`, `hash_sha256_archivo`, `fecha_descarga`, `inicio`, `fin`, `filas_leidas`, `filas_escritas`, `avisos_cuadre`, `estado` (OK/ERROR), `mensaje_error`, `version_codigo` (git commit) y `script`.
+  - Además, un generador que, a partir de una ejecución de `etl.ejecutar_todo`, escribe la fila correspondiente en `prototipos/linaje/control_cargas_ejemplo.csv`. No se cambia el comportamiento de `ejecutar_todo` en producción: se hace con un envoltorio dentro de `prototipos/`.
+- [ ] **Paso 3:** una nota breve, `prototipos/linaje/API_INE.md`, sobre la API JSON del INE (Tempus: URL base, ejemplo de llamada para una serie y para la lista de municipios) como vía para automatizar los maestros. El MIVAU no tiene API: sus fuentes son ficheros XLS.
+- [ ] **Paso 4:** tests.
+  - Cada columna de `campos.csv` de las tablas con datos tiene al menos una fila en `mapeo.csv`.
+  - El CSV de ejemplo de control de cargas tiene todas las columnas del DDL.
+- [ ] **Paso 5:** `DECISIONES_PENDIENTES.md`, como mínimo con estas preguntas:
+  - ¿El mapeo se mantiene a mano o se genera?
+  - ¿Dónde vive `META` (mismo servidor o aparte)?
+  - ¿Se guardan los archivos originales (por hash) para auditoría?
+  - ¿Se guarda el historial de revisiones (enlaza con la decisión de UPSERT)?
+- [ ] **Paso 6:** el libro añade una hoja `Mapeo (prototipo)`. Commit `feat(prototipo): mapeo origen-destino y control de cargas`.
