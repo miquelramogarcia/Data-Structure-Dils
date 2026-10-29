@@ -1,1 +1,10 @@
 alias,nivel,cod_territorio,cod_ccaa,nombre_ccaa,cod_provincia,nombre_provincia,cod_municipio,nombre_municipio,nombre_territorio,fuente_alias,cod_fuente_alias
+Asturias (Principado de ),CCAA,CA03,03,"Asturias, Principado de",,,,,"Asturias, Principado de",MIVAU-31205000,
+Balears (Illes),CCAA,CA04,04,"Balears, Illes",,,,,"Balears, Illes",MIVAU-31205000,
+Palmas (Las),Provincia,PR35,05,Canarias,35,"Palmas, Las",,,"Palmas, Las",MIVAU-31205000,
+Castilla-La Mancha,CCAA,CA08,08,Castilla - La Mancha,,,,,Castilla - La Mancha,MIVAU-31205000,
+Coruña (A),Provincia,PR15,12,Galicia,15,"Coruña, A",,,"Coruña, A",MIVAU-31205000,
+Madrid (Comunidad de),CCAA,CA13,13,"Madrid, Comunidad de",,,,,"Madrid, Comunidad de",MIVAU-31205000,
+Murcia (Región de),CCAA,CA14,14,"Murcia, Región de",,,,,"Murcia, Región de",MIVAU-31205000,
+Navarra (Comunidad Foral de),CCAA,CA15,15,"Navarra, Comunidad Foral de",,,,,"Navarra, Comunidad Foral de",MIVAU-31205000,
+Rioja (La),CCAA,CA17,17,"Rioja, La",,,,,"Rioja, La",MIVAU-31205000,
