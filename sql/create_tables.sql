@@ -1,0 +1,33 @@
+-- Generado por etl/catalogo/sql.py el 2026-10-29. No editar a mano.
+
+
+CREATE SCHEMA IF NOT EXISTS `MIVAU` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_spanish_ci;
+
+CREATE TABLE IF NOT EXISTS `MIVAU`.`mivau_vpo_calificaciones_definitivas` (
+  `id_registro` VARCHAR(64) NOT NULL COMMENT 'Clave natural: cod_territorio + ''_'' + regimen + ''_'' + periodo. Igual en cada descarga: sirve para el UPSERT (longitud máx. actual: 18)',
+  `nivel` ENUM('Nacional','CCAA','Provincia','Municipio') NOT NULL COMMENT 'Nivel territorial del dato',
+  `cod_territorio` VARCHAR(8) NOT NULL COMMENT 'Código territorial único (ES / CAxx / PRxx / MUxxxxx)',
+  `cod_ccaa` CHAR(2) NOT NULL COMMENT 'Código INE de comunidad autónoma (00 = Nacional)',
+  `nombre_ccaa` VARCHAR(100) NOT NULL COMMENT 'Nombre oficial INE de la comunidad autónoma (según maestro BD_Territorios)',
+  `cod_provincia` CHAR(2) NULL COMMENT 'Código INE de provincia (NULL en filas Nacional/CCAA)',
+  `nombre_provincia` VARCHAR(100) NULL COMMENT 'Nombre oficial INE de la provincia (NULL en filas Nacional/CCAA)',
+  `cod_municipio` CHAR(5) NULL COMMENT 'Código INE de municipio (NULL: la fuente no trae nivel municipal)',
+  `nombre_municipio` VARCHAR(100) NULL COMMENT 'Nombre oficial INE del municipio (NULL: la fuente no trae nivel municipal)',
+  `regimen` VARCHAR(20) NOT NULL COMMENT 'Régimen de protección. La fuente solo publica el total de planes estatales y autonómicos → TOTAL',
+  `periodo` VARCHAR(7) NOT NULL COMMENT 'Periodo normalizado: AAAAMmm / AAAATn / AAAA',
+  `frecuencia` CHAR(1) NOT NULL COMMENT 'M = mensual, T = trimestral, A = anual',
+  `anio` SMALLINT UNSIGNED NOT NULL COMMENT 'Año del periodo',
+  `trimestre` TINYINT UNSIGNED NULL COMMENT 'Trimestre (1-4); NULL en mensual y anual',
+  `mes` TINYINT UNSIGNED NULL COMMENT 'Mes (1-12); NULL en trimestral y anual',
+  `fecha` DATE NOT NULL COMMENT 'Primer día del periodo',
+  `num_viviendas` INT UNSIGNED NULL COMMENT 'Número de viviendas protegidas con calificación definitiva (planes estatales y autonómicos). NULL si la fuente no publica el dato',
+  `provisional` TINYINT(1) NOT NULL COMMENT '1 = dato provisional, 0 = definitivo (la fuente no marca datos provisionales → 0)',
+  `fecha_descarga` DATE NOT NULL COMMENT 'Día en que se descargó el dato de la fuente',
+  PRIMARY KEY (`id_registro`),
+  INDEX `idx_nivel` (`nivel`),
+  INDEX `idx_cod_territorio` (`cod_territorio`),
+  INDEX `idx_cod_ccaa` (`cod_ccaa`),
+  INDEX `idx_cod_provincia` (`cod_provincia`),
+  INDEX `idx_cod_municipio` (`cod_municipio`),
+  INDEX `idx_fecha` (`fecha`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci COMMENT='Vivienda protegida: calificaciones definitivas, planes estatales y autonómicos';

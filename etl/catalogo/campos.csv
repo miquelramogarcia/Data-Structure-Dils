@@ -1,0 +1,20 @@
+tabla,campo,tipo_mysql,nulo,clave,descripcion,ejemplo
+mivau_vpo_calificaciones_definitivas,id_registro,VARCHAR(64),NO,PRIMARY KEY,Clave natural: cod_territorio + '_' + regimen + '_' + periodo. Igual en cada descarga: sirve para el UPSERT (longitud máx. actual: 18),PR04_TOTAL_2026M06
+mivau_vpo_calificaciones_definitivas,nivel,"ENUM('Nacional','CCAA','Provincia','Municipio')",NO,INDEX,Nivel territorial del dato,Provincia
+mivau_vpo_calificaciones_definitivas,cod_territorio,VARCHAR(8),NO,INDEX,Código territorial único (ES / CAxx / PRxx / MUxxxxx),PR04
+mivau_vpo_calificaciones_definitivas,cod_ccaa,CHAR(2),NO,INDEX,Código INE de comunidad autónoma (00 = Nacional),01
+mivau_vpo_calificaciones_definitivas,nombre_ccaa,VARCHAR(100),NO,,Nombre oficial INE de la comunidad autónoma (según maestro BD_Territorios),Andalucía
+mivau_vpo_calificaciones_definitivas,cod_provincia,CHAR(2),SÍ,INDEX,Código INE de provincia (NULL en filas Nacional/CCAA),04
+mivau_vpo_calificaciones_definitivas,nombre_provincia,VARCHAR(100),SÍ,,Nombre oficial INE de la provincia (NULL en filas Nacional/CCAA),Almería
+mivau_vpo_calificaciones_definitivas,cod_municipio,CHAR(5),SÍ,INDEX,Código INE de municipio (NULL: la fuente no trae nivel municipal),
+mivau_vpo_calificaciones_definitivas,nombre_municipio,VARCHAR(100),SÍ,,Nombre oficial INE del municipio (NULL: la fuente no trae nivel municipal),
+mivau_vpo_calificaciones_definitivas,regimen,VARCHAR(20),NO,,Régimen de protección. La fuente solo publica el total de planes estatales y autonómicos → TOTAL,TOTAL
+mivau_vpo_calificaciones_definitivas,periodo,VARCHAR(7),NO,,Periodo normalizado: AAAAMmm / AAAATn / AAAA,2026M06
+mivau_vpo_calificaciones_definitivas,frecuencia,CHAR(1),NO,,"M = mensual, T = trimestral, A = anual",M
+mivau_vpo_calificaciones_definitivas,anio,SMALLINT UNSIGNED,NO,,Año del periodo,2026
+mivau_vpo_calificaciones_definitivas,trimestre,TINYINT UNSIGNED,SÍ,,Trimestre (1-4); NULL en mensual y anual,
+mivau_vpo_calificaciones_definitivas,mes,TINYINT UNSIGNED,SÍ,,Mes (1-12); NULL en trimestral y anual,6
+mivau_vpo_calificaciones_definitivas,fecha,DATE,NO,INDEX,Primer día del periodo,2026-06-01
+mivau_vpo_calificaciones_definitivas,num_viviendas,INT UNSIGNED,SÍ,,Número de viviendas protegidas con calificación definitiva (planes estatales y autonómicos). NULL si la fuente no publica el dato,69
+mivau_vpo_calificaciones_definitivas,provisional,TINYINT(1),NO,,"1 = dato provisional, 0 = definitivo (la fuente no marca datos provisionales → 0)",0
+mivau_vpo_calificaciones_definitivas,fecha_descarga,DATE,NO,,Día en que se descargó el dato de la fuente,

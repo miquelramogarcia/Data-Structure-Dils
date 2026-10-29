@@ -32,6 +32,16 @@ Data Dils/
     fuentes/<DATASET_ID>.md       ficha por fuente  [pendiente]
 ```
 
+## Catálogo y SQL
+
+El catálogo vive en `etl/catalogo/tablas.csv` y `etl/catalogo/campos.csv` (fuente de verdad, sembrado una sola vez desde el Excel del usuario con `python -m etl.catalogo.sembrar`). Para regenerar `sql/create_tables.sql` tras cambiar el catálogo:
+
+```
+python -m etl.catalogo.sql
+```
+
+No se edita el SQL a mano. Las tablas sin campos diseñados aún se omiten.
+
 ## Requisitos e instalación
 
 Python 3.13.

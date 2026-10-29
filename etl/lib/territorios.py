@@ -24,12 +24,17 @@ def normalizar(txt: str) -> str:
     return " ".join(t.lower().split())
 
 
+def leer_hoja_usuario(xlsx: Path, hoja: str, **kw) -> pd.DataFrame:
+    """Lee una hoja del libro del usuario desde una copia temporal (el original no se toca)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        copia = Path(tmp) / "copia.xlsx"
+        shutil.copy(xlsx, copia)
+        return pd.read_excel(copia, sheet_name=hoja, **kw)
+
+
 def cargar_maestro(xlsx: Path) -> pd.DataFrame:
     """Lee la hoja 'Maestro Territorios' desde una copia temporal y añade territorios_extra.csv."""
-    with tempfile.TemporaryDirectory() as tmp:
-        copia = Path(tmp) / "maestro.xlsx"
-        shutil.copy(xlsx, copia)
-        df = pd.read_excel(copia, sheet_name="Maestro Territorios", header=None, dtype=str)
+    df = leer_hoja_usuario(xlsx, "Maestro Territorios", header=None, dtype=str)
     if len(df) and str(df.iloc[0, 0]).strip().lower() == "alias":
         df = df.iloc[1:]
     df = df.iloc[:, :len(COLUMNAS_MAESTRO)].copy()
