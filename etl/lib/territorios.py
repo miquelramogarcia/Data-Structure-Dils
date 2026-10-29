@@ -1,4 +1,5 @@
 """Maestro de territorios: carga, resolución de nombres y expansión de uniprovinciales."""
+import re
 import shutil
 import tempfile
 import unicodedata
@@ -14,10 +15,16 @@ COLUMNAS_TERRITORIO = ["nivel", "cod_territorio", "cod_ccaa", "nombre_ccaa", "co
                        "nombre_provincia", "cod_municipio", "nombre_municipio"]
 CCAA_UNIPROVINCIALES = {"03", "04", "06", "13", "14", "15", "17", "18", "19"}
 EXTRA_CSV = Path(__file__).with_name("territorios_extra.csv")
+# Municipios del INE (relación oficial a 1-1-2026), generado por etl/lib/municipios_ine_generar.py
+MUNICIPIOS_CSV = Path(__file__).with_name("municipios_ine.csv")
 
 
 class TerritorioDesconocido(ValueError):
     """El texto no corresponde a ningún territorio del maestro."""
+
+
+class TerritorioAmbiguo(ValueError):
+    """El texto corresponde a varios territorios distintos y nada permite elegir uno."""
 
 
 def normalizar(txt: str) -> str:
@@ -61,7 +68,7 @@ def leer_hoja_con_errores(xlsx: Path, hoja: str) -> pd.DataFrame:
 
 
 def cargar_maestro(xlsx: Path) -> pd.DataFrame:
-    """Lee la hoja 'Maestro Territorios' desde una copia temporal y añade territorios_extra.csv."""
+    """Lee la hoja 'Maestro Territorios' desde una copia temporal y añade territorios_extra.csv y los municipios del INE."""
     df = leer_hoja_usuario(xlsx, "Maestro Territorios", header=None, dtype=str)
     if len(df) and str(df.iloc[0, 0]).strip().lower() == "alias":
         df = df.iloc[1:]
@@ -70,25 +77,113 @@ def cargar_maestro(xlsx: Path) -> pd.DataFrame:
     extra = pd.read_csv(EXTRA_CSV, dtype=str)
     if len(extra):
         df = pd.concat([df, extra[COLUMNAS_MAESTRO]], ignore_index=True)
+    municipios = pd.read_csv(MUNICIPIOS_CSV, dtype=str)
+    df = pd.concat([df, municipios[COLUMNAS_MAESTRO]], ignore_index=True)
     return df.reset_index(drop=True)
 
 
-def resolver(maestro: pd.DataFrame, texto: str, nivel: str | None = None) -> dict:
-    clave = normalizar(texto)
-    m = maestro
-    if nivel is not None:
-        m = m[m["nivel"] == nivel]
-    coincide = (m["alias"].map(lambda x: normalizar(x) if pd.notna(x) else None) == clave) | \
-               (m["nombre_territorio"].map(lambda x: normalizar(x) if pd.notna(x) else None) == clave)
-    enc = m[coincide]
-    if enc.empty:
-        raise TerritorioDesconocido(f"Territorio no encontrado en el maestro: {texto!r}")
-    if len(enc) > 1 and nivel is None:
-        ccaa = enc[enc["nivel"] == "CCAA"]
-        if not ccaa.empty:
-            enc = ccaa
-    fila = enc.iloc[0]
+_ARTICULOS = r"(?:el|la|los|las|lo|l'|els|les|a|o|as|os)"
+_RE_ART_PARENTESIS = re.compile(rf"^(?P<resto>.+?)\s*\(\s*(?P<art>{_ARTICULOS})\s*\)$")
+_RE_ART_COMA = re.compile(rf"^(?P<resto>.+?)\s*,\s*(?P<art>{_ARTICULOS})$")
+_RANGO_NIVEL = {"CCAA": 0, "Provincia": 1}  # preferencia sin nivel: CCAA > Provincia > el resto (Municipio...)
+_INDICES: dict[int, tuple] = {}
+
+
+def clave_municipio(txt: str) -> str:
+    """Clave de comparación de un municipio: sin tildes ni mayúsculas y con el artículo al principio.
+
+    "Ejido (El)", "Ejido, El" y "El Ejido" dan "el ejido"; "Palmas de Gran Canaria (Las)" da
+    "las palmas de gran canaria". Solo se usa con nivel Municipio (provincias y CCAA no cambian).
+    """
+    t = normalizar(txt)
+    m = _RE_ART_PARENTESIS.match(t) or _RE_ART_COMA.match(t)
+    if m:
+        art = m.group("art")
+        t = art + m.group("resto") if art.endswith("'") else f"{art} {m.group('resto')}"
+    return t
+
+
+def _indice(maestro: pd.DataFrame) -> dict:
+    """Columnas normalizadas del maestro, calculadas una vez por DataFrame (resolver se llama muchas veces)."""
+    en_cache = _INDICES.get(id(maestro))
+    if en_cache is not None and en_cache[0] is maestro and en_cache[1] == len(maestro):
+        return en_cache[2]
+    alias = maestro["alias"].map(lambda x: normalizar(x) if pd.notna(x) else "").to_numpy()
+    nombre = maestro["nombre_territorio"].map(lambda x: normalizar(x) if pd.notna(x) else "").to_numpy()
+    es_mu = (maestro["nivel"] == "Municipio").to_numpy()
+    mu_map: dict[str, list[int]] = {}
+    for pos in es_mu.nonzero()[0]:
+        for col in ("alias", "nombre_territorio"):
+            valor = maestro.iloc[pos][col]
+            if pd.isna(valor):
+                continue
+            # nombre completo y cada parte de los nombres bilingües ("Alcoy/Alcoi" -> "alcoy", "alcoi")
+            for k in {clave_municipio(valor), *(clave_municipio(p) for p in str(valor).split("/"))}:
+                if k and pos not in mu_map.setdefault(k, []):
+                    mu_map[k].append(pos)
+    idx = {"alias": alias, "nombre": nombre, "mu_map": mu_map, "nivel": maestro["nivel"].to_numpy()}
+    _INDICES[id(maestro)] = (maestro, len(maestro), idx)
+    return idx
+
+
+def _fila(maestro: pd.DataFrame, pos: int) -> dict:
+    fila = maestro.iloc[pos]
     return {c: (None if pd.isna(fila[c]) else fila[c]) for c in COLUMNAS_TERRITORIO}
+
+
+def _elegir(maestro: pd.DataFrame, posiciones, texto: str, nivel: str | None, contexto: str = "") -> dict:
+    """Una sola fila entre las candidatas: sin nivel prefiere CCAA, luego Provincia; si quedan varios
+    territorios distintos (mismo nombre en dos provincias) falla en lugar de elegir uno."""
+    pos = list(posiciones)
+    if nivel is None and pos:
+        rangos = {p: _RANGO_NIVEL.get(maestro.iloc[p]["nivel"], 2) for p in pos}
+        mejor = min(rangos.values())
+        pos = [p for p in pos if rangos[p] == mejor]
+    codigos = sorted({maestro.iloc[p]["cod_territorio"] for p in pos})
+    if len(codigos) > 1:
+        raise TerritorioAmbiguo(f"Territorio ambiguo en el maestro: {texto!r}{contexto} corresponde a "
+                                f"{', '.join(codigos[:6])}; hace falta la provincia o el nivel")
+    return _fila(maestro, pos[0])
+
+
+def _candidatas(maestro: pd.DataFrame, texto: str, nivel: str | None):
+    idx = _indice(maestro)
+    clave = normalizar(texto)
+    coincide = (idx["alias"] == clave) | (idx["nombre"] == clave)
+    if nivel is not None:
+        coincide &= idx["nivel"] == nivel
+    pos = coincide.nonzero()[0]
+    if nivel == "Municipio":
+        claves = {clave_municipio(texto), *(clave_municipio(p) for p in str(texto).split("/"))}
+        pos = sorted({*pos, *(q for k in claves for q in idx["mu_map"].get(k, []))})
+    return pos
+
+
+def resolver(maestro: pd.DataFrame, texto: str, nivel: str | None = None) -> dict:
+    """Fila del maestro para `texto` (sin tildes ni mayúsculas); TerritorioDesconocido si no existe.
+
+    Sin `nivel`, si el nombre sirve a varios niveles gana CCAA > Provincia > Municipio. Con nivel
+    "Municipio" el artículo puede ir al principio o al final ("Ejido (El)" = "El Ejido") y vale cualquiera de
+    las dos partes de un nombre bilingüe ("Alcoy" o "Alcoi" para "Alcoy/Alcoi"). Un nombre de
+    municipio repetido en varias provincias da TerritorioAmbiguo; usa `resolver_municipio`.
+    """
+    pos = _candidatas(maestro, texto, nivel)
+    if len(pos) == 0:
+        raise TerritorioDesconocido(f"Territorio no encontrado en el maestro: {texto!r}")
+    return _elegir(maestro, pos, texto, nivel)
+
+
+def resolver_municipio(maestro: pd.DataFrame, municipio: str, provincia: str) -> dict:
+    """Municipio por nombre dentro de una provincia (resuelve nombres repetidos entre provincias).
+
+    TerritorioDesconocido si la provincia no existe o el municipio no está en ella.
+    """
+    prov = resolver(maestro, provincia, nivel="Provincia")
+    pos = [p for p in _candidatas(maestro, municipio, "Municipio")
+           if maestro.iloc[p]["cod_provincia"] == prov["cod_provincia"]]
+    if not pos:
+        raise TerritorioDesconocido(f"Municipio no encontrado en la provincia: {municipio!r} en {provincia!r}")
+    return _elegir(maestro, pos, municipio, "Municipio", f" en {provincia!r}")
 
 
 def _clave(fila: pd.Series, cols: list[str]) -> tuple:
