@@ -6,6 +6,7 @@ import pytest
 from openpyxl import load_workbook
 
 from etl import construir_libro as cl
+from etl.catalogo.sql import cargar_catalogo
 from etl.construir_libro import construir_libro, nombre_hoja
 
 ORIGEN = Path(__file__).parent.parent / "Data Dils.xlsx"
@@ -53,7 +54,8 @@ def test_hipervinculo_apunta_a_hoja(libro_real):
 
 def test_hojas_en_orden(libro_real):
     assert libro_real.sheetnames[:5] == ["Tablas", "Campos", "Maestro Territorios", "Glosario", "General"]
-    assert len(libro_real.sheetnames) == 6
+    tablas, _ = cargar_catalogo()
+    assert len(libro_real.sheetnames) == 5 + int((tablas["estado"] == "con_datos").sum())
 
 
 def test_nombres_hoja_unicos(tmp_path):

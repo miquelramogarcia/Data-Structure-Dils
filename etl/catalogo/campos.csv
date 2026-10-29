@@ -18,3 +18,39 @@ mivau_vpo_calificaciones_definitivas,fecha,DATE,NO,INDEX,Primer día del periodo
 mivau_vpo_calificaciones_definitivas,num_viviendas,INT UNSIGNED,SÍ,,Número de viviendas protegidas con calificación definitiva (planes estatales y autonómicos). NULL si la fuente no publica el dato,69
 mivau_vpo_calificaciones_definitivas,provisional,TINYINT(1),NO,,"1 = dato provisional, 0 = definitivo (la fuente no marca datos provisionales → 0)",0
 mivau_vpo_calificaciones_definitivas,fecha_descarga,DATE,NO,,Día en que se descargó el dato de la fuente,
+mivau_vivienda_libre_iniciadas,id_registro,VARCHAR(64),NO,PRIMARY KEY,Clave natural: cod_territorio + '_' + periodo. Igual en cada descarga: sirve para el UPSERT (longitud máx. actual: 12),PR04_2026M06
+mivau_vivienda_libre_iniciadas,nivel,"ENUM('Nacional','CCAA','Provincia','Municipio')",NO,INDEX,Nivel territorial del dato,Provincia
+mivau_vivienda_libre_iniciadas,cod_territorio,VARCHAR(8),NO,INDEX,Código territorial único (ES / CAxx / PRxx / MUxxxxx),PR04
+mivau_vivienda_libre_iniciadas,cod_ccaa,CHAR(2),NO,INDEX,Código INE de comunidad autónoma (00 = Nacional),01
+mivau_vivienda_libre_iniciadas,nombre_ccaa,VARCHAR(100),NO,,Nombre oficial INE de la comunidad autónoma (según maestro BD_Territorios),Andalucía
+mivau_vivienda_libre_iniciadas,cod_provincia,CHAR(2),SÍ,INDEX,Código INE de provincia (NULL en filas Nacional/CCAA),04
+mivau_vivienda_libre_iniciadas,nombre_provincia,VARCHAR(100),SÍ,,Nombre oficial INE de la provincia (NULL en filas Nacional/CCAA),Almería
+mivau_vivienda_libre_iniciadas,cod_municipio,CHAR(5),SÍ,INDEX,Código INE de municipio (NULL: la fuente no trae nivel municipal),
+mivau_vivienda_libre_iniciadas,nombre_municipio,VARCHAR(100),SÍ,,Nombre oficial INE del municipio (NULL: la fuente no trae nivel municipal),
+mivau_vivienda_libre_iniciadas,periodo,VARCHAR(7),NO,,Periodo normalizado: AAAAMmm / AAAATn / AAAA,2026M06
+mivau_vivienda_libre_iniciadas,frecuencia,CHAR(1),NO,,"M = mensual, T = trimestral, A = anual",M
+mivau_vivienda_libre_iniciadas,anio,SMALLINT UNSIGNED,NO,,Año del periodo,2026
+mivau_vivienda_libre_iniciadas,trimestre,TINYINT UNSIGNED,SÍ,,Trimestre (1-4); NULL en mensual y anual,
+mivau_vivienda_libre_iniciadas,mes,TINYINT UNSIGNED,SÍ,,Mes (1-12); NULL en trimestral y anual,6
+mivau_vivienda_libre_iniciadas,fecha,DATE,NO,INDEX,Primer día del periodo,2026-06-01
+mivau_vivienda_libre_iniciadas,num_viviendas,INT UNSIGNED,SÍ,,Número de viviendas libres iniciadas en el mes (unidad: vivienda; estimación del MIVAU). NULL si la fuente no publica el dato (ND),289
+mivau_vivienda_libre_iniciadas,provisional,TINYINT(1),NO,,"1 = dato provisional, 0 = definitivo (la fuente no marca datos provisionales → 0)",0
+mivau_vivienda_libre_iniciadas,fecha_descarga,DATE,NO,,Día en que se descargó el dato de la fuente,
+mivau_vivienda_libre_terminadas,id_registro,VARCHAR(64),NO,PRIMARY KEY,Clave natural: cod_territorio + '_' + periodo. Igual en cada descarga: sirve para el UPSERT (longitud máx. actual: 12),PR04_2026M06
+mivau_vivienda_libre_terminadas,nivel,"ENUM('Nacional','CCAA','Provincia','Municipio')",NO,INDEX,Nivel territorial del dato,Provincia
+mivau_vivienda_libre_terminadas,cod_territorio,VARCHAR(8),NO,INDEX,Código territorial único (ES / CAxx / PRxx / MUxxxxx),PR04
+mivau_vivienda_libre_terminadas,cod_ccaa,CHAR(2),NO,INDEX,Código INE de comunidad autónoma (00 = Nacional),01
+mivau_vivienda_libre_terminadas,nombre_ccaa,VARCHAR(100),NO,,Nombre oficial INE de la comunidad autónoma (según maestro BD_Territorios),Andalucía
+mivau_vivienda_libre_terminadas,cod_provincia,CHAR(2),SÍ,INDEX,Código INE de provincia (NULL en filas Nacional/CCAA),04
+mivau_vivienda_libre_terminadas,nombre_provincia,VARCHAR(100),SÍ,,Nombre oficial INE de la provincia (NULL en filas Nacional/CCAA),Almería
+mivau_vivienda_libre_terminadas,cod_municipio,CHAR(5),SÍ,INDEX,Código INE de municipio (NULL: la fuente no trae nivel municipal),
+mivau_vivienda_libre_terminadas,nombre_municipio,VARCHAR(100),SÍ,,Nombre oficial INE del municipio (NULL: la fuente no trae nivel municipal),
+mivau_vivienda_libre_terminadas,periodo,VARCHAR(7),NO,,Periodo normalizado: AAAAMmm / AAAATn / AAAA,2026M06
+mivau_vivienda_libre_terminadas,frecuencia,CHAR(1),NO,,"M = mensual, T = trimestral, A = anual",M
+mivau_vivienda_libre_terminadas,anio,SMALLINT UNSIGNED,NO,,Año del periodo,2026
+mivau_vivienda_libre_terminadas,trimestre,TINYINT UNSIGNED,SÍ,,Trimestre (1-4); NULL en mensual y anual,
+mivau_vivienda_libre_terminadas,mes,TINYINT UNSIGNED,SÍ,,Mes (1-12); NULL en trimestral y anual,6
+mivau_vivienda_libre_terminadas,fecha,DATE,NO,INDEX,Primer día del periodo,2026-06-01
+mivau_vivienda_libre_terminadas,num_viviendas,INT UNSIGNED,SÍ,,Número de viviendas libres terminadas en el mes (unidad: vivienda; estimación del MIVAU). NULL si la fuente no publica el dato (ND),103
+mivau_vivienda_libre_terminadas,provisional,TINYINT(1),NO,,"1 = dato provisional, 0 = definitivo (la fuente no marca datos provisionales → 0)",0
+mivau_vivienda_libre_terminadas,fecha_descarga,DATE,NO,,Día en que se descargó el dato de la fuente,
