@@ -1,0 +1,7 @@
+etl/descargas/
+~$*
+__pycache__/
+.venv/
+*_v2.xlsx
+.superpowers/
+.pytest_cache/
