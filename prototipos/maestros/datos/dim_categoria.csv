@@ -1,0 +1,46 @@
+dimension;codigo;descripcion
+antiguedad;HASTA_5_ANOS;HASTA_5_ANOS
+antiguedad;MAS_5_ANOS;MAS_5_ANOS
+antiguedad;NUEVA;NUEVA
+antiguedad;SEGUNDA_MANO;SEGUNDA_MANO
+antiguedad;TOTAL;TOTAL
+cod_ccaa_comprador;00;Total residentes en España
+cod_ccaa_comprador;01;Andalucía
+cod_ccaa_comprador;02;Aragón
+cod_ccaa_comprador;03;Asturias, Principado de
+cod_ccaa_comprador;04;Balears, Illes
+cod_ccaa_comprador;05;Canarias
+cod_ccaa_comprador;06;Cantabria
+cod_ccaa_comprador;07;Castilla y León
+cod_ccaa_comprador;08;Castilla - La Mancha
+cod_ccaa_comprador;09;Cataluña
+cod_ccaa_comprador;10;Comunitat Valenciana
+cod_ccaa_comprador;11;Extremadura
+cod_ccaa_comprador;12;Galicia
+cod_ccaa_comprador;13;Madrid, Comunidad de
+cod_ccaa_comprador;14;Murcia, Región de
+cod_ccaa_comprador;15;Navarra, Comunidad Foral de
+cod_ccaa_comprador;16;País Vasco
+cod_ccaa_comprador;17;Rioja, La
+cod_ccaa_comprador;99;Ceuta y Melilla
+promotor;ADMINISTRACIONES_PUBLICAS;ADMINISTRACIONES_PUBLICAS
+promotor;PRIVADO_COOPERATIVAS;PRIVADO_COOPERATIVAS
+promotor;PRIVADO_OTROS;PRIVADO_OTROS
+promotor;PRIVADO_PERSONAS_FISICAS;PRIVADO_PERSONAS_FISICAS
+promotor;PRIVADO_SOCIEDADES;PRIVADO_SOCIEDADES
+promotor;PRIVADO_TOTAL;PRIVADO_TOTAL
+promotor;TOTAL;TOTAL
+regimen;LIBRE;LIBRE
+regimen;PROTEGIDA;PROTEGIDA
+regimen;TOTAL;TOTAL
+tipo_comprador;EXTRANJERO_RESIDENTE;EXTRANJERO_RESIDENTE
+tipo_comprador;TOTAL;TOTAL
+tipo_obra;AMPLIACION;AMPLIACION
+tipo_obra;OBRA_NUEVA;OBRA_NUEVA
+tipo_obra;OBRA_NUEVA_EN_BLOQUE;OBRA_NUEVA_EN_BLOQUE
+tipo_obra;OBRA_NUEVA_OTROS_EDIFICIOS;OBRA_NUEVA_OTROS_EDIFICIOS
+tipo_obra;OBRA_NUEVA_UNIFAMILIAR;OBRA_NUEVA_UNIFAMILIAR
+tipo_obra;REFORMA_RESTAURACION;REFORMA_RESTAURACION
+tipo_obra;TOTAL;TOTAL
+tipologia;COLECTIVA;COLECTIVA
+tipologia;UNIFAMILIAR;UNIFAMILIAR
