@@ -17,7 +17,7 @@ El diseño completo está en `docs/2026-10-29-base-datos-vivienda-design.md` y e
 ```
 Data Dils/
   Data Dils.xlsx                  original del usuario (solo lectura; nunca se modifica)
-  Data Dils_v2.xlsx               libro resultante (catálogo + hojas de datos)  [pendiente]
+  Data Dils_v2.xlsx               libro resultante (catálogo + hojas de datos); no se versiona
   sql/create_tables.sql           todos los CREATE TABLE  [pendiente]
   etl/
     descargas/                    ficheros originales descargados (no se versionan)
@@ -53,10 +53,17 @@ python -m pip install -r requirements.txt
 ## Cómo regenerarlo todo
 
 ```
-python -m etl.ejecutar_todo
+python -m etl.ejecutar_todo                  # todas las fuentes
+python -m etl.ejecutar_todo MIVAU-31205000   # solo una
 ```
 
-[pendiente] El punto de entrada se crea en fases posteriores.
+Al terminar las fuentes se reconstruye `Data Dils_v2.xlsx` (hojas: Tablas, Campos, Maestro Territorios, Glosario, General y una por tabla con datos). Para regenerar solo el libro, sin volver a ejecutar las fuentes, a partir de los CSV de `etl/salida/`:
+
+```
+python -c "from etl.construir_libro import construir_libro; construir_libro()"
+```
+
+El libro se crea siempre desde cero (nunca se escribe `Data Dils.xlsx`); `Data Dils.xlsx` solo se lee, desde una copia temporal, para el Maestro Territorios y la hoja General.
 
 ## Tests
 

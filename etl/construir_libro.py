@@ -1,0 +1,221 @@
+"""Constructor del libro de salida `Data Dils_v2.xlsx` (catálogo + una hoja por tabla con datos).
+
+Siempre se construye un libro nuevo con openpyxl: nunca se carga ni se escribe `Data Dils.xlsx`.
+"""
+from datetime import date
+from pathlib import Path
+
+import pandas as pd
+from openpyxl import Workbook
+from openpyxl.comments import Comment
+from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.hyperlink import Hyperlink
+
+from etl.catalogo.sql import DIR as DIR_CATALOGO, cargar_catalogo, create_table_sql
+from etl.lib.territorios import cargar_maestro, leer_hoja_usuario
+
+DIR_SALIDA = Path(__file__).parent / "salida"
+GLOSARIO = DIR_CATALOGO / "glosario.csv"
+LIMITE_FILAS_HOJA = 1_048_575
+FILAS_MUESTRA = 100_000
+MAX_HOJA = 31
+ANCHO_MAX = 60
+ANCHO_CREATE = 100
+ERRORES_EXCEL = {"#REF!", "#VALUE!", "#DIV/0!", "#N/A", "#NAME?", "#NULL!", "#NUM!"}
+NOTA_KPIS = "Columna vaciada: contenía #VALUE! (fórmulas rotas por vínculo externo perdido)"
+
+FUENTE = Font(name="Arial", size=10)
+FUENTE_CAB = Font(name="Arial", size=10, bold=True)
+FUENTE_ENLACE = Font(name="Arial", size=10, color="0563C1", underline="single")
+RELLENO_CAB = PatternFill("solid", start_color="D9D9D9", end_color="D9D9D9")
+FORMATO_FECHA = "yyyy-mm-dd"
+TIPOS_NUMERICOS = ("INT", "SMALLINT", "TINYINT", "MEDIUMINT", "BIGINT", "DECIMAL", "FLOAT", "DOUBLE")
+
+
+def nombre_hoja(tabla: str, usados: set[str]) -> str:
+    """Recorta a 31 caracteres y desempata con ~2, ~3… (Excel no distingue mayúsculas)."""
+    ocupados = {u.lower() for u in usados}
+    cand = tabla[:MAX_HOJA]
+    n = 1
+    while cand.lower() in ocupados:
+        n += 1
+        suf = f"~{n}"
+        cand = tabla[:MAX_HOJA - len(suf)] + suf
+    return cand
+
+
+def _py(v):
+    """Valor de pandas/numpy a valor Python escribible (NaN/NaT a None)."""
+    if v is None:
+        return None
+    if not isinstance(v, (str, date)) and pd.isna(v):
+        return None
+    if isinstance(v, pd.Timestamp):
+        return v.to_pydatetime()
+    if hasattr(v, "item"):
+        return v.item()
+    return v
+
+
+def _tipar(df: pd.DataFrame, campos: pd.DataFrame) -> tuple[pd.DataFrame, set[str]]:
+    """Convierte las columnas leídas como texto según tipo_mysql. Devuelve (df, columnas fecha)."""
+    tipos = dict(zip(campos["campo"], campos["tipo_mysql"].str.upper()))
+    fechas: set[str] = set()
+    df = df.copy()
+    for c in df.columns:
+        t = tipos.get(c, "")
+        if t == "DATE":
+            df[c] = pd.to_datetime(df[c], format="%Y-%m-%d").dt.date
+            fechas.add(c)
+        elif t.startswith(TIPOS_NUMERICOS):
+            df[c] = pd.to_numeric(df[c])
+    return df, fechas
+
+
+def _escribir(wb: Workbook, nombre: str, df: pd.DataFrame, *, fechas=(), nota: str | None = None,
+              ancho_fijo: dict[str, int] | None = None, ajustar=frozenset(), superior: bool = False):
+    """Hoja con estilo común: cabecera en negrita con relleno, cabecera inmovilizada, autofiltro, anchos."""
+    ws = wb.create_sheet(nombre)
+    fila_cab = 2 if nota else 1
+    if nota:
+        ws.cell(1, 1, nota).font = FUENTE_CAB
+    cols = list(df.columns)
+    for j, c in enumerate(cols, 1):
+        cel = ws.cell(fila_cab, j, c)
+        cel.font, cel.fill = FUENTE_CAB, RELLENO_CAB
+        cel.alignment = Alignment(vertical="top" if superior else "center", wrap_text=superior)
+    textos = {j for j, c in enumerate(cols, 1) if str(c).startswith("cod_")}
+    envolver = Alignment(vertical="top", wrap_text=True)
+    arriba = Alignment(vertical="top")
+    for i, fila in enumerate(df.astype(object).itertuples(index=False, name=None), fila_cab + 1):
+        for j, v in enumerate(fila, 1):
+            v = _py(v)
+            if v is None:
+                continue
+            cel = ws.cell(i, j, v)
+            cel.font = FUENTE
+            if j in textos:
+                cel.number_format = "@"
+            elif cols[j - 1] in fechas:
+                cel.number_format = FORMATO_FECHA
+            if superior:
+                cel.alignment = envolver if cols[j - 1] in ajustar else arriba
+    if cols:
+        ws.freeze_panes = ws.cell(fila_cab + 1, 1)
+        ws.auto_filter.ref = f"A{fila_cab}:{get_column_letter(len(cols))}{fila_cab + len(df)}"
+    for j, c in enumerate(cols, 1):
+        if ancho_fijo and c in ancho_fijo:
+            ancho = ancho_fijo[c]
+        elif c in fechas:
+            ancho = 12
+        else:
+            ancho = max([len(str(c)) + 2] + [min(len(str(v)), ANCHO_MAX) + 2 for v in df[c].head(200).dropna()])
+        tope = ancho if ancho_fijo and c in ancho_fijo else ANCHO_MAX
+        ws.column_dimensions[get_column_letter(j)].width = min(max(ancho, 8), tope)
+    return ws
+
+
+def _hoja_tablas(wb, tablas, campos, hojas, filas) -> None:
+    cab = ["Esquema", "Tabla My SQL", "Estadística", "Origen", "Fuente", "Frecuencia", "Formato Origen",
+           "Prioridad", "Estado", "Filas", "CREATE TABLE"]
+    reg = []
+    for _, t in tablas.iterrows():
+        sql = ""
+        if t["esquema"] and t["tabla"]:
+            cs = campos[campos["tabla"] == t["tabla"]]
+            if not cs.empty:
+                sql = create_table_sql(t["esquema"], t["tabla"], cs, t["estadistica"])
+        reg.append([t["esquema"] or None, t["tabla"] or None, t["estadistica"], t["origen"], t["fuente"],
+                    t["frecuencia"], t["formato_origen"], t["prioridad"], t["estado"],
+                    filas.get(t["dataset_id"]), sql or None])
+    ws = _escribir(wb, "Tablas", pd.DataFrame(reg, columns=cab), superior=True, ajustar=set(cab),
+                   ancho_fijo={"CREATE TABLE": ANCHO_CREATE, "Estadística": 50, "Fuente": 40, "Origen": 30,
+                               "Tabla My SQL": 40, "Esquema": 12})
+    for i, (_, t) in enumerate(tablas.iterrows(), 2):
+        hoja = hojas.get(t["dataset_id"])
+        if hoja:
+            cel = ws.cell(i, 2)
+            cel.hyperlink = Hyperlink(ref=cel.coordinate, location="'" + hoja.replace("'", "''") + "'!A1")
+            cel.font = FUENTE_ENLACE
+
+
+def _hoja_general(wb, origen: Path) -> int:
+    """Copia la hoja General del usuario sin la columna KPIs ni celdas de error. Devuelve nº de errores."""
+    df = leer_hoja_usuario(origen, "General").astype(object)
+    if "KPIs" in df.columns:
+        df["KPIs"] = None
+    errores = 0
+    for c in df.columns:
+        for i, v in df[c].items():
+            if isinstance(v, str) and v.strip() in ERRORES_EXCEL:
+                df.at[i, c] = None
+                errores += 1
+    ws = _escribir(wb, "General", df, superior=True, ajustar=set(df.columns))
+    if "KPIs" in df.columns:
+        ws.cell(1, list(df.columns).index("KPIs") + 1).comment = Comment(NOTA_KPIS, "Claude", width=320, height=60)
+    return errores
+
+
+def _hoja_datos(wb, tabla: str, hoja: str, campos: pd.DataFrame, dir_salida: Path) -> int:
+    """Escribe la hoja de una tabla (completa o muestra) y devuelve el total de filas del CSV."""
+    csv = dir_salida / f"{tabla}.csv"
+    if not csv.exists():
+        raise FileNotFoundError(f"Falta el CSV de salida de {tabla}: {csv}")
+    df = pd.read_csv(csv, sep=";", dtype=str, encoding="utf-8")
+    total = len(df)
+    nota = None
+    if total > LIMITE_FILAS_HOJA:
+        df = df.head(FILAS_MUESTRA)
+        nota = (f"Muestra: primeras {FILAS_MUESTRA} de {total} filas. "
+                f"La tabla completa está en etl/salida/{tabla}.csv")
+    df, fechas = _tipar(df, campos)
+    _escribir(wb, hoja, df, fechas=fechas, nota=nota)
+    return total
+
+
+def construir_libro(origen: Path = Path("Data Dils.xlsx"), salida: Path = Path("Data Dils_v2.xlsx"), *,
+                    dir_salida: Path | None = None,
+                    catalogo: tuple[pd.DataFrame, pd.DataFrame] | None = None) -> None:
+    dir_salida = dir_salida or DIR_SALIDA
+    tablas, campos = catalogo or cargar_catalogo()
+    tablas = tablas.sort_values("dataset_id", kind="stable").reset_index(drop=True)
+
+    con_datos = tablas[(tablas["estado"] == "con_datos") & (tablas["tabla"] != "")]
+    usados: set[str] = set()
+    hojas: dict[str, str] = {}
+    for _, t in con_datos[con_datos["hoja"] != ""].iterrows():       # los nombres ya fijados, primero
+        hojas[t["dataset_id"]] = t["hoja"]
+        usados.add(t["hoja"])
+    for _, t in con_datos[con_datos["hoja"] == ""].iterrows():
+        hojas[t["dataset_id"]] = nombre_hoja(t["tabla"], usados)
+        usados.add(hojas[t["dataset_id"]])
+
+    wb = Workbook()
+    wb.remove(wb.active)
+    filas: dict[str, int] = {}
+    # Tablas necesita el nº de filas: se escriben antes las hojas de datos y se reordenan al final.
+    for _, t in con_datos.iterrows():
+        filas[t["dataset_id"]] = _hoja_datos(wb, t["tabla"], hojas[t["dataset_id"]],
+                                             campos[campos["tabla"] == t["tabla"]], dir_salida)
+    _hoja_tablas(wb, tablas, campos, hojas, filas)
+    _escribir(wb, "Campos", campos.rename(columns={
+        "tabla": "TABLA", "campo": "Campo", "tipo_mysql": "Tipo MySQL", "nulo": "Nulo", "clave": "Clave",
+        "descripcion": "Descripción", "ejemplo": "Ejemplo"}), superior=True, ajustar={"Descripción"})
+    _escribir(wb, "Maestro Territorios", cargar_maestro(origen))
+    if GLOSARIO.exists():
+        glo = pd.read_csv(GLOSARIO, dtype=str, keep_default_na=False)
+    else:
+        glo = pd.DataFrame(columns=["termino", "definicion", "fuente"])
+    _escribir(wb, "Glosario", glo.rename(columns={"termino": "Término", "definicion": "Definición",
+                                                  "fuente": "Fuente"}), superior=True, ajustar={"Definición"})
+    errores = _hoja_general(wb, origen)
+
+    orden = ["Tablas", "Campos", "Maestro Territorios", "Glosario", "General"] + list(hojas.values())
+    wb._sheets = [wb[n] for n in orden]
+    wb.active = 0
+    for ws in wb.worksheets:
+        ws.sheet_view.tabSelected = ws.title == "Tablas"
+    wb.save(salida)
+    print(f"Libro escrito en {salida}: {len(orden)} hojas; "
+          f"{errores} celdas con error de Excel vaciadas en General (además de la columna KPIs)")
