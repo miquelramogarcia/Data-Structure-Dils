@@ -11,6 +11,8 @@ Proyecto Python (ETL) que descarga estadísticas de vivienda de fuentes pública
 
 Esquemas de base de datos: `MIVAU`, `NOTARIADO`, `IDEALISTA`.
 
+Resumen corto para leer: `docs/Documentacion_Dils.pdf` (se regenera con `python -m etl.herramientas.generar_pdf` a partir de este README, el catálogo, el glosario y los prototipos).
+
 El diseño completo está en `docs/2026-10-29-base-datos-vivienda-design.md` y el plan de implementación en `docs/plans/2026-10-29-base-datos-vivienda-fase1.md`.
 
 ## Estructura de carpetas
