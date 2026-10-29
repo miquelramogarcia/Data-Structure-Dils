@@ -239,7 +239,10 @@ def _hoja_datos(wb, tabla: str, hoja: str, campos: pd.DataFrame, dir_salida: Pat
 
 def construir_libro(origen: Path = Path("Data Dils.xlsx"), salida: Path = Path("Data Dils_v2.xlsx"), *,
                     dir_salida: Path | None = None,
-                    catalogo: tuple[pd.DataFrame, pd.DataFrame] | None = None) -> None:
+                    catalogo: tuple[pd.DataFrame, pd.DataFrame] | None = None,
+                    hojas_extra: list[tuple[str, pd.DataFrame]] | None = None) -> None:
+    """`hojas_extra`: hojas opcionales (nombre, tabla) que se añaden al final del libro; por defecto ninguna, así
+    que el libro de producción no cambia (las usa prototipos/libro.py para las hojas "(prototipo)")."""
     dir_salida = dir_salida or DIR_SALIDA
     tablas, campos = catalogo or cargar_catalogo()
     tablas = tablas.sort_values("dataset_id", kind="stable").reset_index(drop=True)
@@ -279,6 +282,11 @@ def construir_libro(origen: Path = Path("Data Dils.xlsx"), salida: Path = Path("
     err_kpis, errores = _hoja_general(wb, origen)
 
     orden = ["Tablas", "Campos", "Maestro Territorios", "Glosario", "General"] + list(hoja_de_tabla.values())
+    for nombre, df in hojas_extra or []:
+        if len(nombre) > MAX_HOJA or nombre.lower() in {o.lower() for o in orden}:
+            raise ValueError(f"Nombre de hoja extra no válido o repetido: {nombre!r}")
+        _escribir(wb, nombre, df, superior=True)
+        orden.append(nombre)
     wb._sheets = [wb[n] for n in orden]
     wb.active = 0
     for ws in wb.worksheets:
