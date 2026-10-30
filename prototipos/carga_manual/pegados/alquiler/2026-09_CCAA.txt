@@ -1,0 +1,20 @@
+Localización	Precio m2 sep 2026	Variación mensual	Variación trimestral	Variación anual	Máximo histórico	Variación máximo
+España	15,1 €/m2	- 0,3 %	- 0,4 %	+ 5,6 %	15,3 €/m2 jul 2026	- 1,2 %
+Andalucía	14,1 €/m2	+ 0,3 %	- 1,4 %	+ 5,2 %	14,3 €/m2 mayo 2026	- 1,8 %
+Aragón	11,2 €/m2	- 0,4 %	- 0,5 %	+ 9,6 %	11,3 €/m2 jul 2026	- 0,7 %
+Asturias	10,9 €/m2	+ 0,4 %	+ 0,2 %	+ 9,3 %	11,7 €/m2 jun 2008	- 6,6 %
+Baleares	20,2 €/m2	+ 1,2 %	+ 0,8 %	+ 3,6 %	20,3 €/m2 mayo 2026	- 0,2 %
+Canarias	15,2 €/m2	- 1,0 %	- 1,0 %	+ 4,3 %	15,5 €/m2 jul 2026	- 1,9 %
+Cantabria	11,8 €/m2	- 0,3 %	+ 1,6 %	+ 5,4 %	13,8 €/m2 jul 2007	- 14,3 %
+Castilla y León	9,7 €/m2	+ 0,1 %	- 0,9 %	+ 6,7 %	9,8 €/m2 jun 2026	- 0,9 %
+Castilla-La Mancha	8,8 €/m2	- 0,1 %	+ 0,1 %	+ 8,3 %	8,9 €/m2 jul 2026	- 1,0 %
+Cataluña	15,9 €/m2	- 0,3 %	+ 0,3 %	+ 2,2 %	16,0 €/m2 jul 2026	- 1,0 %
+Comunitat Valenciana	13,2 €/m2	- 0,4 %	+ 0,7 %	+ 6,0 %	13,3 €/m2 ago 2026	- 0,4 %
+Euskadi	15,0 €/m2	+ 0,8 %	+ 0,3 %	- 0,3 %	15,1 €/m2 ago 2025	- 0,8 %
+Extremadura	7,7 €/m2	- 0,6 %	+ 0,4 %	+ 5,7 %	7,8 €/m2 ago 2026	- 0,6 %
+Galicia	9,9 €/m2	- 0,2 %	+ 0,2 %	+ 4,7 %	10,0 €/m2 jul 2026	- 1,1 %
+La Rioja	9,5 €/m2	- 1,7 %	- 0,9 %	+ 5,3 %	9,7 €/m2 jul 2026	- 2,0 %
+Madrid Comunidad	21,6 €/m2	+ 0,5 %	+ 1,4 %	+ 5,7 %	21,6 €/m2 sep 2026	0,0 %
+Melilla	11,3 €/m2	- 2,8 %	- 3,2 %	+ 8,6 %	11,7 €/m2 jul 2026	- 3,6 %
+Murcia Región	9,5 €/m2	- 0,6 %	+ 1,3 %	+ 4,8 %	9,6 €/m2 jul 2026	- 0,8 %
+Navarra	10,6 €/m2	- 0,8 %	- 1,7 %	+ 0,9 %	10,8 €/m2 dic 2025	- 1,7 %

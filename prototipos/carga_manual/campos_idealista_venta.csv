@@ -1,0 +1,25 @@
+tabla,campo,tipo_mysql,nulo,clave,descripcion,ejemplo,generado
+idealista_precio_venta,id_registro,VARCHAR(64),NO,PRIMARY KEY,Clave natural: cod_territorio + '_' + periodo (UPSERT),CA13_2026M09,
+idealista_precio_venta,nivel,"ENUM('Nacional','CCAA','Provincia','Municipio')",NO,INDEX,Nivel territorial del dato,Provincia,
+idealista_precio_venta,cod_territorio,VARCHAR(8),NO,INDEX,Código territorial único (ES / CAxx / PRxx / MUxxxxx),PR04,
+idealista_precio_venta,cod_ccaa,CHAR(2),NO,INDEX,Código INE de comunidad autónoma (00 = Nacional),01,
+idealista_precio_venta,nombre_ccaa,VARCHAR(100),NO,,Nombre oficial INE de la comunidad autónoma (según maestro BD_Territorios),Andalucía,
+idealista_precio_venta,cod_provincia,CHAR(2),SÍ,INDEX,Código INE de provincia (NULL en filas Nacional/CCAA),04,
+idealista_precio_venta,nombre_provincia,VARCHAR(100),SÍ,,Nombre oficial INE de la provincia (NULL en filas Nacional/CCAA),Almería,
+idealista_precio_venta,cod_municipio,CHAR(5),SÍ,INDEX,Código INE de municipio (NULL: la fuente no trae nivel municipal),,
+idealista_precio_venta,nombre_municipio,VARCHAR(100),SÍ,,Nombre oficial INE del municipio (NULL: la fuente no trae nivel municipal),,
+idealista_precio_venta,periodo,VARCHAR(7),NO,,Periodo normalizado: AAAAMmm / AAAATn / AAAA,2026T2,
+idealista_precio_venta,frecuencia,CHAR(1),NO,,"M = mensual, T = trimestral, A = anual",T,
+idealista_precio_venta,anio,SMALLINT UNSIGNED,NO,,Año del periodo. Calculada por MySQL a partir de fecha: YEAR(fecha),2026,YEAR(fecha)
+idealista_precio_venta,trimestre,TINYINT UNSIGNED,SÍ,,Trimestre (1-4); NULL en mensual y anual. Calculada por MySQL a partir de fecha y frecuencia: solo si frecuencia = 'T',2,CASE WHEN frecuencia = 'T' THEN QUARTER(fecha) END
+idealista_precio_venta,mes,TINYINT UNSIGNED,SÍ,,Mes (1-12); NULL en trimestral y anual. Calculada por MySQL a partir de fecha y frecuencia: solo si frecuencia = 'M',,CASE WHEN frecuencia = 'M' THEN MONTH(fecha) END
+idealista_precio_venta,fecha,DATE,NO,INDEX,Primer día del periodo,2026-04-01,
+idealista_precio_venta,precio_eur_m2,"DECIMAL(10,2)",SÍ,,"Precio medio de oferta de la vivienda en venta (€/m²); precio pedido en anuncios, no de compraventa",,
+idealista_precio_venta,var_mensual_pct,"DECIMAL(6,2)",SÍ,,Variación mensual (%),,
+idealista_precio_venta,var_trimestral_pct,"DECIMAL(6,2)",SÍ,,Variación trimestral (%),,
+idealista_precio_venta,var_anual_pct,"DECIMAL(6,2)",SÍ,,Variación anual (%),,
+idealista_precio_venta,max_historico_eur_m2,"DECIMAL(10,2)",SÍ,,Máximo histórico (€/m²),,
+idealista_precio_venta,max_historico_periodo,VARCHAR(7),SÍ,,Mes del máximo histórico (AAAAMmm),,
+idealista_precio_venta,var_maximo_pct,"DECIMAL(6,2)",SÍ,,Distancia al máximo histórico (%),,
+idealista_precio_venta,provisional,TINYINT(1),NO,,"1 = dato provisional, 0 = definitivo. La fuente no marca ningún trimestre como provisional: siempre 0",0,
+idealista_precio_venta,fecha_descarga,DATE,NO,,Día en que se guardó el archivo pegado a mano (carga manual),,
