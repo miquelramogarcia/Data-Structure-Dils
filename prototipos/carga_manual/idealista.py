@@ -9,6 +9,8 @@ Dos informes con la misma forma de tabla, uno por tipo:
 Idealista no ofrece descarga: la tabla de la web se copia y se pega en un archivo de texto en
 prototipos/carga_manual/pegados/<tipo>/<AAAA-MM>_<nivel>.txt (nivel: CCAA, Provincia o Municipio); ver OPCIONES.md.
 El periodo se lee de la cabecera ("Precio m2 sep 2026"); el nombre del archivo solo aporta el nivel.
+La segunda tabla de la página (evolución de los últimos 12 meses de España, cabecera "Mes | Precio m2 | …") se pega
+en <AAAA-MM>_historico.txt y añade esos 12 meses para España (sin máximo histórico).
 
 Uso: python -m prototipos.carga_manual.idealista alquiler|venta   (sin argumento: los dos)
 """
@@ -31,8 +33,12 @@ ALIAS = AQUI / "alias_idealista.csv"     # nombres propios de Idealista; no afec
 NIVELES = ("CCAA", "Provincia", "Municipio")
 CABECERA = ["Localización", "Precio m2", "Variación mensual", "Variación trimestral", "Variación anual",
             "Máximo histórico", "Variación máximo"]
+# Segunda tabla de la página: evolución de los últimos 12 meses de España ("Septiembre 2026", "Agosto 2026"…).
+CABECERA_HISTORICO = ["Mes", "Precio m2", "Variación mensual", "Variación trimestral", "Variación anual"]
 MESES = {"ene": 1, "feb": 2, "mar": 3, "abr": 4, "may": 5, "mayo": 5, "jun": 6, "jul": 7, "ago": 8,
-         "sep": 9, "sept": 9, "oct": 10, "nov": 11, "dic": 12}
+         "sep": 9, "sept": 9, "oct": 10, "nov": 11, "dic": 12,
+         "enero": 1, "febrero": 2, "marzo": 3, "abril": 4, "junio": 6, "julio": 7, "agosto": 8,
+         "septiembre": 9, "setiembre": 9, "octubre": 10, "noviembre": 11, "diciembre": 12}
 
 # Lo único que cambia entre alquiler y venta: tabla, carpeta, diseño y nombre de las dos medidas en €.
 TIPOS = {
@@ -68,14 +74,40 @@ def _numero(texto: str) -> float | None:
         raise ValueError(f"Idealista: valor no numérico {texto!r}") from None
 
 
-def leer_pegado(path: Path, tipo: str) -> tuple[pd.DataFrame, str]:
-    """Lee el texto pegado (columnas separadas por tabulador) y devuelve (filas, nivel)."""
+def leer_historico(path: Path, tipo: str, lineas: list[str]) -> pd.DataFrame:
+    """Tabla 'Mes | Precio m2 | Variación mensual | trimestral | anual' (12 meses de España, sin máximo histórico)."""
     t = TIPOS[tipo]
+    filas = []
+    for i, linea in enumerate(lineas[1:], 2):
+        c = [x.strip() for x in linea.split("\t")]
+        if len(c) != len(CABECERA_HISTORICO):
+            raise ValueError(f"{t['dataset_id']}: {path.name}, línea {i}: {len(c)} columnas en vez de "
+                             f"{len(CABECERA_HISTORICO)}")
+        filas.append({"territorio_txt": "España", t["precio"]: _numero(c[1]), "var_mensual_pct": _numero(c[2]),
+                      "var_trimestral_pct": _numero(c[3]), "var_anual_pct": _numero(c[4]),
+                      t["maximo"]: None, "max_historico_periodo": None, "var_maximo_pct": None,
+                      **periodo_mensual(*_mes_anio(c[0]))})
+    return pd.DataFrame(filas)
+
+
+def leer_pegado(path: Path, tipo: str) -> tuple[pd.DataFrame, str]:
+    """Lee el texto pegado (columnas separadas por tabulador) y devuelve (filas, nivel).
+
+    Dos formas de tabla, según la cabecera: la de territorios ("Localización…", el nivel sale del nombre del
+    archivo: _CCAA, _Provincia o _Municipio) y la de los últimos 12 meses ("Mes…", siempre España: archivo
+    <AAAA-MM>_historico.txt).
+    """
+    t = TIPOS[tipo]
+    lineas = [l for l in path.read_text(encoding="utf-8").splitlines() if l.strip()]
+    cab = lineas[0].split("\t")
+    if cab[0].strip() == "Mes":
+        if [c.strip() for c in cab] != CABECERA_HISTORICO:
+            raise ValueError(f"{t['dataset_id']}: {path.name}: cabecera inesperada {cab!r}; "
+                             f"se esperaba {CABECERA_HISTORICO!r}")
+        return leer_historico(path, tipo, lineas), "Nacional"
     nivel = path.stem.split("_")[-1]
     if nivel not in NIVELES:
         raise ValueError(f"{t['dataset_id']}: el archivo {path.name} debe acabar en _CCAA, _Provincia o _Municipio")
-    lineas = [l for l in path.read_text(encoding="utf-8").splitlines() if l.strip()]
-    cab = lineas[0].split("\t")
     if len(cab) != len(CABECERA) or not all(c.strip().startswith(e) for c, e in zip(cab, CABECERA)):
         raise ValueError(f"{t['dataset_id']}: {path.name}: cabecera inesperada {cab!r}; "
                          f"se esperaba {CABECERA!r} (¿se pegó otra tabla?)")
@@ -125,8 +157,11 @@ def construir(tipo: str, maestro: pd.DataFrame | None = None) -> pd.DataFrame:
         raise FileNotFoundError(f"{t['dataset_id']}: no hay archivos pegados en pegados/{tipo}/")
     partes = [transformar(p, tipo, date.fromtimestamp(p.stat().st_mtime), maestro) for p in archivos]
     tabla = pd.concat(partes, ignore_index=True)
-    # Si un mismo periodo y territorio se pegó dos veces, gana el archivo guardado más tarde.
-    tabla = tabla.sort_values("fecha_descarga", kind="stable").drop_duplicates("id_registro", keep="last")
+    # Si un mismo periodo y territorio está en dos archivos, gana el guardado más tarde; a igual fecha, la fila de
+    # la tabla de territorios (trae el máximo histórico) sobre la del histórico de 12 meses (no lo trae).
+    tabla["_con_maximo"] = tabla["max_historico_periodo"].notna()
+    tabla = (tabla.sort_values(["fecha_descarga", "_con_maximo"], kind="stable")
+             .drop_duplicates("id_registro", keep="last").drop(columns="_con_maximo"))
     tabla = tabla.sort_values(["fecha", "cod_territorio"]).reset_index(drop=True)
     campos = pd.read_csv(AQUI / f"campos_idealista_{tipo}.csv", dtype=str, keep_default_na=False)
     for _, c in campos.iterrows():

@@ -13,7 +13,7 @@ python -m prototipos.carga_manual.idealista            # alquiler y venta
 python -m prototipos.carga_manual.libro                # Excel de muestra: idealista_prototipo.xlsx
 ```
 
-Resultado: `salida/idealista_precio_alquiler.csv` (27 filas) y `salida/idealista_precio_venta.csv` (29 filas): España,
+Resultado: `salida/idealista_precio_alquiler.csv` (27 filas) y `salida/idealista_precio_venta.csv` (40 filas, con el histórico de 12 meses de España): España,
 las comunidades pegadas y las provincias de las comunidades uniprovinciales, con el mismo formato que el resto de tablas: códigos INE, `periodo` 2026M09,
 `fecha` 2026-09-01, `id_registro` y validación con las mismas reglas.
 
@@ -23,7 +23,11 @@ las comunidades pegadas y las provincias de las comunidades uniprovinciales, con
 2. Copiar (Ctrl+C) y pegar en el Bloc de notas (Ctrl+V). Se conservan los tabuladores entre columnas.
 3. Guardar en `pegados/alquiler/` o `pegados/venta/` como `<AAAA-MM>_<nivel>.txt`, con nivel `CCAA`, `Provincia` o `Municipio`
    (por ejemplo, `2026-09_Provincia.txt`). El mes se lee de la cabecera ("Precio m2 sep 2026"); el nivel, del nombre.
-4. Ejecutar el comando de arriba.
+4. Opcional: la misma página trae una segunda tabla, "Mes | Precio m2 | Variación mensual | …", con los últimos
+   12 meses de España. Se copia igual y se guarda como `<AAAA-MM>_historico.txt` (ejemplo:
+   `pegados/venta/2026-09_historico.txt`). Añade esos 12 meses para España, sin máximo histórico; si un mes ya está
+   en la tabla de comunidades, se queda la fila de comunidades, que trae el máximo.
+5. Ejecutar el comando de arriba.
 
 Qué lee y qué comprueba:
 - Lee los números en formato español: "15,1 €/m2", "- 0,3 %", "+ 5,6 %" y el máximo "15,3 €/m2 jul 2026".
